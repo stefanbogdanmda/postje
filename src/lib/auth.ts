@@ -13,7 +13,13 @@ import { isRateLimited } from "./rate-limit"
 // Resend SDK for sending custom emails
 import { Resend as ResendClient } from "resend"
 
-const resendClient = new ResendClient(process.env.AUTH_RESEND_KEY)
+const AUTH_RESEND_KEY = process.env.AUTH_RESEND_KEY
+if (!AUTH_RESEND_KEY) {
+  throw new Error("AUTH_RESEND_KEY environment variable is not set")
+}
+
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "onboarding@resend.dev"
+const resendClient = new ResendClient(AUTH_RESEND_KEY)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -25,8 +31,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   providers: [
     Resend({
-      apiKey: process.env.AUTH_RESEND_KEY,
-      from: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
+      apiKey: AUTH_RESEND_KEY,
+      from: EMAIL_FROM,
       sendVerificationRequest: async ({ identifier: email, url }) => {
         // Check rate limit before sending
         if (isRateLimited(email)) {
@@ -35,7 +41,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         await resendClient.emails.send({
-          from: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
+          from: EMAIL_FROM,
           to: email,
           subject: "Je inloglink voor Social AI",
           html: `
