@@ -3,13 +3,16 @@ import { drizzle } from "drizzle-orm/better-sqlite3"
 import { users } from "../src/db/schema"
 import { eq } from "drizzle-orm"
 
-const adminEmail = process.env.ADMIN_EMAIL
+const adminEmailRaw = process.env.ADMIN_EMAIL
 
-if (!adminEmail) {
+if (!adminEmailRaw) {
   console.error("Error: ADMIN_EMAIL environment variable is not set.")
   console.error("Add ADMIN_EMAIL=your@email.com to your .env.local file.")
   process.exit(1)
 }
+
+// Re-assign after the guard so TypeScript narrows to `string`
+const adminEmail: string = adminEmailRaw
 
 const sqlite = new Database("sqlite.db")
 const db = drizzle(sqlite)
