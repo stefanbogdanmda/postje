@@ -1,59 +1,58 @@
-import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
-export default auth((req) => {
-  const { nextUrl } = req
-  const path = nextUrl.pathname
-  const isLoggedIn = !!req.auth
-  const role = req.auth?.user?.role
+// Middleware runs in the edge runtime, which cannot access SQLite.
+// So we check for the session cookie directly instead of using auth().
+// This tells us IF the user is logged in, but not WHO they are.
+// Role-based authorization happens in server components (Node.js runtime),
+// which can access the database.
 
-  // Root — smart redirect
+function getSessionCookie(req: NextRequest): string | undefined {
+  return (
+    req.cookies.get("authjs.session-token")?.value ??
+    req.cookies.get("__Secure-authjs.session-token")?.value
+  )
+}
+
+export default function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname
+  const hasSession = !!getSessionCookie(req)
+
+  // Root — redirect based on session presence
+  // The actual destination (admin vs dashboard vs welcome) is decided
+  // by the root page server component, which can check the user's role.
   if (path === "/") {
-    if (!isLoggedIn) {
+    if (!hasSession) {
       return NextResponse.redirect(new URL("/login", req.url))
     }
-    if (role === "admin") {
-      return NextResponse.redirect(new URL("/admin", req.url))
-    }
-    return NextResponse.redirect(new URL("/dashboard", req.url))
+    return NextResponse.next()
   }
 
   // Login page — redirect away if already logged in
   if (path === "/login") {
-    if (isLoggedIn) {
-      if (role === "admin") {
-        return NextResponse.redirect(new URL("/admin", req.url))
-      }
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+    if (hasSession) {
+      // Redirect to root, which will route to the right destination
+      return NextResponse.redirect(new URL("/", req.url))
     }
     return NextResponse.next()
   }
 
-  // Admin routes — require admin role
-  if (path.startsWith("/admin")) {
-    if (!isLoggedIn) {
-      return NextResponse.redirect(new URL("/login", req.url))
-    }
-    if (role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
-    }
-    return NextResponse.next()
-  }
-
-  // Protected routes (dashboard, welcome) — require any valid session
-  if (path.startsWith("/dashboard") || path.startsWith("/welcome")) {
-    if (!isLoggedIn) {
+  // Protected routes (admin, dashboard, welcome) — require session cookie
+  // Role-based checks (e.g., admin-only) happen in the page server components.
+  if (
+    path.startsWith("/admin") ||
+    path.startsWith("/dashboard") ||
+    path.startsWith("/welcome")
+  ) {
+    if (!hasSession) {
       return NextResponse.redirect(new URL("/login", req.url))
     }
     return NextResponse.next()
   }
 
-  // Everything else (API routes, static files) — let through
   return NextResponse.next()
-})
+}
 
-// Tell Next.js which routes this middleware should run on.
-// Excludes API auth routes and static files.
 export const config = {
   matcher: [
     "/",
