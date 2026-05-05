@@ -66,7 +66,26 @@ When the first paying client signs up, this constraint relaxes. Until then, any 
 
 ## 5. How Features Get Built
 
-[This section is intentionally left to be written after the first feature is built using the workflow. Do not auto-fill this section.]
+Every feature on this project follows the Superpowers workflow:
+
+**brainstorming → writing-plans → executing-plans → verification**
+
+Each is a skill. Invoke them by name in Claude Code. Don't skip steps.
+
+### For features with a UI component
+
+Also invoke the official Anthropic frontend-design skill alongside brainstorming. It pushes for a clear aesthetic direction before any code is written, which prevents generic AI-looking output.
+
+### Debugging rules (learned from the magic link auth bug)
+
+- **Diagnose before fixing.** Force evidence-gathering as a separate step from code changes. "Tell me what to look at, don't change code yet" is the right shape of prompt when something breaks.
+- **If a page refresh fixes the bug, it's a redirect target or timing problem, not a "data not set" problem.** This pattern saved an hour. Look at what URL the redirect is going to, not whether the underlying data exists.
+- **Don't strip features silently during debugging.** When a feature gets removed to isolate a bug, track it explicitly and restore it as a deliberate post-fix step. The rate limiter was nearly lost this way.
+- **Test incrementally, never in batches.** One step, confirm result, next step. Catches small issues (wrong field type, wrong email saved) before they compound into "everything is broken."
+
+### Handoff documents
+
+When stopping mid-feature, write a handoff document in `docs/handoffs/`. It should capture: what's done, what's broken, what's been tried, and what to try next. Paste it into a fresh chat to resume without losing context.
 
 ## 6. Project Conventions
 
