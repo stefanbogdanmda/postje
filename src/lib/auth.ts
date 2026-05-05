@@ -9,6 +9,8 @@ import {
   verificationTokens,
 } from "@/db/schema"
 
+import { isRateLimited } from "./rate-limit"
+
 // Resend SDK for sending custom emails
 import { Resend as ResendClient } from "resend"
 
@@ -33,6 +35,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       apiKey: AUTH_RESEND_KEY,
       from: EMAIL_FROM,
       sendVerificationRequest: async ({ identifier: email, url }) => {
+        if (isRateLimited(email)) {
+          return
+        }
+
         await resendClient.emails.send({
           from: EMAIL_FROM,
           to: email,
