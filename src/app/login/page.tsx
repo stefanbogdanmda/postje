@@ -18,6 +18,7 @@ export default function LoginPage() {
     // navigating to a default Auth.js page.
     await signIn("resend", {
       email,
+      callbackUrl: "/",
       redirect: false,
     })
 
