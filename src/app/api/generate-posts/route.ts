@@ -13,7 +13,9 @@ import type { WeeklyPlan, DayPosts, GenerationResult } from "@/lib/ai/types"
 
 const MODEL = "claude-sonnet-4-6"
 
-export async function GET() {
+export const maxDuration = 60
+
+export async function POST() {
   try {
     const client = getAnthropicClient()
 
