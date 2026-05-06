@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { db } from "@/db"
 import { users } from "@/db/schema"
+import Link from "next/link"
 import SignOutButton from "@/components/sign-out-button"
 import DeleteUserButton from "./delete-user-button"
 
@@ -55,6 +56,19 @@ export default async function AdminPage() {
           ))}
         </tbody>
       </table>
+
+      <div style={{ marginTop: "32px" }}>
+        <Link
+          href="/admin/clients"
+          style={{
+            color: "#1a1a1a",
+            textDecoration: "underline",
+            fontSize: "14px",
+          }}
+        >
+          Manage clients →
+        </Link>
+      </div>
     </main>
   )
 }
