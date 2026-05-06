@@ -49,13 +49,18 @@ export function buildWriteSystemPrompt(client: ClientProfile): string {
 Voice rules:
 - ${client.ownerPersona.style}
 - Write in Dutch.
-- Keep sentences short. Target max 15 words per sentence.
+- No sentence over 15 words. Count before you write. This is a hard rule, not a suggestion.
 - Use emojis sparingly — one or two per post maximum, only ☕ and 🌿 style (warm, natural).
 - Never use these phrases: ${client.bannedPhrases.map((p) => `"${p}"`).join(", ")}
-- Instagram captions can be slightly longer and more visual/poetic.
-- Facebook posts are more conversational, like talking to a neighbour.
+- Instagram captions can be slightly longer and more visual/poetic (3–5 sentences).
+- Facebook posts: 2–3 sentences maximum. Only use 4 sentences for genuine storytelling. Never more than 4.
 
 IMPORTANT: Write as ${client.ownerPersona.name} would actually write. Short. Natural. No marketing speak. No AI-sounding Dutch.
+
+Example of a GOOD Facebook post (this is the right length and tone):
+"Erwtensoep vandaag. Echt herfst buiten ☕ Wie komt er opwarmen?"
+
+That's it. Three short sentences. Done. No customer quotes, no callbacks, no elaborate descriptions.
 
 For each day, also include:
 - "reasoning": a short English note explaining WHY you chose this content and angle (helps the human reviewer understand your thinking)
