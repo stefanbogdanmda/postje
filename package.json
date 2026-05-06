@@ -13,6 +13,7 @@
     "seed:admin": "tsx --env-file=.env.local scripts/seed-admin.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.94.0",
     "@auth/drizzle-adapter": "^1.11.2",
     "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.45.2",
