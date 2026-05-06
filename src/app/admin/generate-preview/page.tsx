@@ -14,7 +14,7 @@ export default function GeneratePreviewPage() {
     setResult(null)
 
     try {
-      const response = await fetch("/api/generate-posts")
+      const response = await fetch("/api/generate-posts", { method: "POST" })
       const data = await response.json()
 
       if (!response.ok) {
