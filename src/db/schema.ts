@@ -29,6 +29,32 @@ export const users = sqliteTable("users", {
 })
 
 // ──────────────────────────────────────────────
+// clients — business profiles for client users
+// ──────────────────────────────────────────────
+export const clients = sqliteTable("clients", {
+  id: text("id")
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  businessName: text("businessName").notNull(),
+  location: text("location"),
+  industry: text("industry"),
+  businessType: text("businessType"),
+  productsServices: text("productsServices"),
+  logoUrl: text("logoUrl"),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+})
+
+// ──────────────────────────────────────────────
 // accounts — Auth.js requirement, links users to auth providers
 // ──────────────────────────────────────────────
 export const accounts = sqliteTable(
