@@ -111,12 +111,19 @@ export interface WeeklyPlan {
   days: DayPlan[]
 }
 
+export interface PostWarning {
+  type: "banned_phrase" | "long_sentence"
+  platform: "instagram" | "facebook"
+  detail: string
+}
+
 export interface DayPosts {
   day: string
   instagramCaption: string
   facebookPost: string
   reasoning: string
   englishSummary: string
+  warnings: PostWarning[]
 }
 
 export interface GenerationResult {
@@ -334,7 +341,132 @@ git commit -m "feat: add Anthropic client and generation prompts"
 
 ---
 
-## Task 4: Build the API route
+## Task 4: JSON extraction and post validation helpers
+
+**Files:**
+- Create: `src/lib/ai/extract-json.ts`
+- Create: `src/lib/ai/validate-posts.ts`
+
+- [ ] **Step 1: Create the JSON extraction helper**
+
+Claude sometimes wraps JSON in markdown fences or adds a sentence before/after it. This helper strips that reliably.
+
+Create `src/lib/ai/extract-json.ts`:
+
+```typescript
+/**
+ * Extracts JSON from a Claude response that might be wrapped in markdown
+ * fences or have surrounding text. Finds the first { ... } or [ ... ] block.
+ */
+export function extractJSON<T>(raw: string): T {
+  // Strip markdown fences if present
+  let cleaned = raw.trim()
+  const fenceMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+  if (fenceMatch) {
+    cleaned = fenceMatch[1].trim()
+  }
+
+  // If it still doesn't start with { or [, find the first occurrence
+  if (!cleaned.startsWith("{") && !cleaned.startsWith("[")) {
+    const firstBrace = cleaned.indexOf("{")
+    const firstBracket = cleaned.indexOf("[")
+    const start = Math.min(
+      firstBrace === -1 ? Infinity : firstBrace,
+      firstBracket === -1 ? Infinity : firstBracket
+    )
+    if (start === Infinity) {
+      throw new Error("No JSON object or array found in response")
+    }
+    cleaned = cleaned.slice(start)
+  }
+
+  return JSON.parse(cleaned) as T
+}
+```
+
+- [ ] **Step 2: Create the post validation helper**
+
+Create `src/lib/ai/validate-posts.ts`:
+
+```typescript
+import type { DayPosts, PostWarning } from "./types"
+
+const MAX_SENTENCE_WORDS = 15
+
+/**
+ * Splits text into sentences (Dutch-aware: handles abbreviations poorly,
+ * but good enough for a prototype).
+ */
+function splitSentences(text: string): string[] {
+  return text
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+/**
+ * Validates a set of generated posts against hard constraints.
+ * Returns posts with a warnings array attached to each day.
+ */
+export function validatePosts(
+  posts: Omit<DayPosts, "warnings">[],
+  bannedPhrases: string[]
+): DayPosts[] {
+  return posts.map((post) => {
+    const warnings: PostWarning[] = []
+
+    // Check both platforms
+    const platforms: Array<{
+      key: "instagram" | "facebook"
+      text: string
+    }> = [
+      { key: "instagram", text: post.instagramCaption },
+      { key: "facebook", text: post.facebookPost },
+    ]
+
+    for (const { key, text } of platforms) {
+      const lower = text.toLowerCase()
+
+      // Banned phrase check
+      for (const phrase of bannedPhrases) {
+        if (lower.includes(phrase.toLowerCase())) {
+          warnings.push({
+            type: "banned_phrase",
+            platform: key,
+            detail: `Contains banned phrase: "${phrase}"`,
+          })
+        }
+      }
+
+      // Sentence length check
+      const sentences = splitSentences(text)
+      for (const sentence of sentences) {
+        const wordCount = sentence.split(/\s+/).length
+        if (wordCount > MAX_SENTENCE_WORDS) {
+          warnings.push({
+            type: "long_sentence",
+            platform: key,
+            detail: `Sentence has ${wordCount} words (max ${MAX_SENTENCE_WORDS}): "${sentence.slice(0, 60)}…"`,
+          })
+        }
+      }
+    }
+
+    return { ...post, warnings }
+  })
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/lib/ai/extract-json.ts src/lib/ai/validate-posts.ts
+git commit -m "feat: add JSON extraction and post validation helpers"
+```
+
+---
+
+## Task 5: Build the API route (core logic)
 
 **Files:**
 - Create: `src/app/api/generate-posts/route.ts`
@@ -352,6 +484,8 @@ import {
   buildWriteSystemPrompt,
   buildWriteUserPrompt,
 } from "@/lib/ai/prompts"
+import { extractJSON } from "@/lib/ai/extract-json"
+import { validatePosts } from "@/lib/ai/validate-posts"
 import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
 import type { WeeklyPlan, DayPosts, GenerationResult } from "@/lib/ai/types"
 
@@ -379,7 +513,7 @@ export async function GET() {
 
     let plan: WeeklyPlan
     try {
-      plan = JSON.parse(planText.text)
+      plan = extractJSON<WeeklyPlan>(planText.text)
     } catch {
       return NextResponse.json(
         { error: "Failed to parse plan JSON", raw: planText.text },
@@ -408,15 +542,18 @@ export async function GET() {
       )
     }
 
-    let postsData: { posts: DayPosts[] }
+    let rawPosts: { posts: Omit<DayPosts, "warnings">[] }
     try {
-      postsData = JSON.parse(writeText.text)
+      rawPosts = extractJSON<{ posts: Omit<DayPosts, "warnings">[] }>(writeText.text)
     } catch {
       return NextResponse.json(
         { error: "Failed to parse posts JSON", raw: writeText.text },
         { status: 500 }
       )
     }
+
+    // Validate posts against hard constraints
+    const validatedPosts = validatePosts(rawPosts.posts, cafeDeHoek.bannedPhrases)
 
     const result: GenerationResult = {
       client: {
@@ -425,7 +562,7 @@ export async function GET() {
         location: cafeDeHoek.location,
       },
       plan: plan.days,
-      posts: postsData.posts,
+      posts: validatedPosts,
       metadata: {
         generatedAt: new Date().toISOString(),
         model: MODEL,
@@ -457,19 +594,19 @@ Expected: no errors (or only pre-existing unrelated ones).
 
 ```bash
 git add src/app/api/generate-posts/route.ts
-git commit -m "feat: add /api/generate-posts route with two-stage pipeline"
+git commit -m "feat: add /api/generate-posts route with two-stage pipeline and validation"
 ```
 
 ---
 
-## Task 5: Build the preview page
+## Task 6: Build the preview page
 
 **Files:**
 - Create: `src/app/admin/generate-preview/page.tsx`
 
 - [ ] **Step 1: Create the preview page**
 
-Create `src/app/admin/generate-preview/page.tsx`:
+Create `src/app/admin/generate-preview/page.tsx` (inline styles to match rest of `/admin`):
 
 ```tsx
 "use client"
@@ -505,69 +642,179 @@ export default function GeneratePreviewPage() {
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-2">Post Generation Preview</h1>
-      <p className="text-gray-600 mb-6">
-        Generate a week of posts for Café de Hoek. Takes ~15–30 seconds (two AI calls).
+    <main style={{ maxWidth: "800px", padding: "32px" }}>
+      <h1 style={{ fontSize: "24px", marginBottom: "8px" }}>
+        Post Generation Preview
+      </h1>
+      <p style={{ color: "#666", marginBottom: "24px" }}>
+        Generate a week of posts for Café de Hoek. Takes ~15–30 seconds (two AI
+        calls).
       </p>
 
       <button
         onClick={handleGenerate}
         disabled={loading}
-        className="px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          padding: "8px 16px",
+          backgroundColor: loading ? "#999" : "#1a1a1a",
+          color: "#fff",
+          border: "none",
+          borderRadius: "4px",
+          cursor: loading ? "not-allowed" : "pointer",
+        }}
       >
         {loading ? "Generating…" : "Generate Week"}
       </button>
 
       {error && (
-        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded text-red-800">
+        <div
+          style={{
+            marginTop: "24px",
+            padding: "16px",
+            backgroundColor: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "4px",
+            color: "#991b1b",
+          }}
+        >
           {error}
         </div>
       )}
 
       {result && (
-        <div className="mt-8 space-y-8">
+        <div style={{ marginTop: "32px" }}>
           {/* Metadata */}
-          <div className="text-sm text-gray-500">
-            Generated at {new Date(result.metadata.generatedAt).toLocaleString()} ·
-            Model: {result.metadata.model} ·
-            Tokens: {result.metadata.planInputTokens + result.metadata.planOutputTokens + result.metadata.postsInputTokens + result.metadata.postsOutputTokens} total
-          </div>
+          <p style={{ fontSize: "12px", color: "#888", marginBottom: "24px" }}>
+            Generated at{" "}
+            {new Date(result.metadata.generatedAt).toLocaleString()} · Model:{" "}
+            {result.metadata.model} · Tokens:{" "}
+            {result.metadata.planInputTokens +
+              result.metadata.planOutputTokens +
+              result.metadata.postsInputTokens +
+              result.metadata.postsOutputTokens}{" "}
+            total
+          </p>
 
           {/* Posts by day */}
           {result.posts.map((post) => {
             const dayPlan = result.plan.find((p) => p.day === post.day)
             return (
-              <div key={post.day} className="border rounded-lg p-6 space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="text-lg font-semibold">{post.day}</h2>
+              <div
+                key={post.day}
+                style={{
+                  border: "1px solid #eee",
+                  borderRadius: "8px",
+                  padding: "24px",
+                  marginBottom: "24px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
+                    {post.day}
+                  </h2>
                   {dayPlan && (
-                    <span className="text-sm text-gray-500">
+                    <span style={{ fontSize: "12px", color: "#888" }}>
                       {dayPlan.theme} · {dayPlan.angle}
                     </span>
                   )}
                 </div>
 
                 {/* Instagram */}
-                <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-pink-700">Instagram</h3>
-                  <p className="whitespace-pre-wrap bg-gray-50 p-3 rounded text-sm">
+                <div style={{ marginBottom: "12px" }}>
+                  <h3
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: "#be185d",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Instagram
+                  </h3>
+                  <p
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      backgroundColor: "#f9fafb",
+                      padding: "12px",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                    }}
+                  >
                     {post.instagramCaption}
                   </p>
                 </div>
 
                 {/* Facebook */}
-                <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-blue-700">Facebook</h3>
-                  <p className="whitespace-pre-wrap bg-gray-50 p-3 rounded text-sm">
+                <div style={{ marginBottom: "12px" }}>
+                  <h3
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: "#1d4ed8",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Facebook
+                  </h3>
+                  <p
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      backgroundColor: "#f9fafb",
+                      padding: "12px",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                    }}
+                  >
                     {post.facebookPost}
                   </p>
                 </div>
 
+                {/* Warnings */}
+                {post.warnings.length > 0 && (
+                  <div
+                    style={{
+                      backgroundColor: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      borderRadius: "4px",
+                      padding: "12px",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    <strong style={{ fontSize: "12px", color: "#92400e" }}>
+                      Warnings:
+                    </strong>
+                    <ul style={{ margin: "4px 0 0 16px", fontSize: "12px", color: "#92400e" }}>
+                      {post.warnings.map((w, i) => (
+                        <li key={i}>
+                          [{w.platform}] {w.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Reasoning + Summary */}
-                <div className="text-sm text-gray-600 space-y-1 border-t pt-3">
-                  <p><span className="font-medium">Why:</span> {post.reasoning}</p>
-                  <p><span className="font-medium">EN:</span> {post.englishSummary}</p>
+                <div
+                  style={{
+                    borderTop: "1px solid #eee",
+                    paddingTop: "12px",
+                    fontSize: "13px",
+                    color: "#666",
+                  }}
+                >
+                  <p style={{ marginBottom: "4px" }}>
+                    <strong>Why:</strong> {post.reasoning}
+                  </p>
+                  <p>
+                    <strong>EN:</strong> {post.englishSummary}
+                  </p>
                 </div>
               </div>
             )
@@ -615,7 +862,7 @@ git commit -m "feat: add post generation preview page"
 
 ---
 
-## Task 6: End-to-end test
+## Task 7: End-to-end test
 
 **Files:** None new — this is a manual verification task.
 
@@ -623,7 +870,7 @@ git commit -m "feat: add post generation preview page"
 
 With `npm run dev` running, visit `http://localhost:3000/admin/generate-preview` and click "Generate Week".
 
-Expected: After 15–30 seconds, you see 7 days of posts with Instagram and Facebook versions, reasoning, and English summaries.
+Expected: After 15–30 seconds, you see 7 days of posts with Instagram and Facebook versions, reasoning, English summaries, and any constraint warnings (yellow boxes).
 
 - [ ] **Step 2: Evaluate the output**
 
@@ -631,7 +878,8 @@ Check against the "feels human" criteria:
 - **Tone:** Does it sound like Marloes (warm, direct, friend-like)?
 - **Variety:** Are angles different across the week?
 - **Platform fit:** IG feels like IG, FB feels like FB?
-- **Banned phrases:** None of the banned phrases appear?
+- **Banned phrases:** None of the banned phrases appear? (If they do, the warnings section catches them automatically.)
+- **Sentence length:** Any warnings for sentences over 15 words?
 - **Language:** Dutch, with short natural sentences?
 
 - [ ] **Step 3: Check the raw JSON**
@@ -657,6 +905,7 @@ git push -u origin feature/post-generation-prototype
 | 1 | Install SDK + env setup | 2 min |
 | 2 | Types + client profile | 3 min |
 | 3 | Anthropic client + prompts | 5 min |
-| 4 | API route (the core logic) | 5 min |
-| 5 | Preview page | 5 min |
-| 6 | Manual end-to-end test | 5 min |
+| 4 | JSON extraction + post validation | 3 min |
+| 5 | API route (the core logic) | 5 min |
+| 6 | Preview page (inline styles) | 5 min |
+| 7 | Manual end-to-end test | 5 min |
