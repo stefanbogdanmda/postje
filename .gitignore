@@ -41,6 +41,9 @@ sqlite.db-journal
 # vercel
 .vercel
 
+# superpowers brainstorming sessions
+.superpowers/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
