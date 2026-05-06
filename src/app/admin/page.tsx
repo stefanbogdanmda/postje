@@ -68,6 +68,17 @@ export default async function AdminPage() {
         >
           Manage clients →
         </Link>
+        <Link
+          href="/admin/generate-preview"
+          style={{
+            color: "#1a1a1a",
+            textDecoration: "underline",
+            fontSize: "14px",
+            marginLeft: "16px",
+          }}
+        >
+          Generate posts preview →
+        </Link>
       </div>
     </main>
   )
