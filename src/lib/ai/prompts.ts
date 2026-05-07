@@ -1,6 +1,15 @@
-import type { ClientProfile, DayPlan } from "./types"
+import type { ClientProfile, DayPlan, AnalyzedPhoto } from "./types"
 
-export function buildPlanSystemPrompt(): string {
+export function buildPlanSystemPrompt(photoCount: number): string {
+  const photoRules =
+    photoCount > 0
+      ? `\n\nPhoto rules:
+- You have ${photoCount} photo(s) available this week. Assign each photo to a day by setting photoId to the photo's ID. Days without photos get photoId: null.
+- HARD RULE: No two photo days may be back-to-back (adjacent). Spread them across the week.
+- Match photo mood and content to the day's theme when possible.
+- Every available photo must be assigned to exactly one day.`
+      : ""
+
   return `You are a social media content planner for small Dutch businesses. Your job is to plan a week of social media posts that feel authentic — as if the business owner wrote them.
 
 You will receive a client profile. Based on it, create a 7-day content plan (Tuesday through Monday).
@@ -9,12 +18,25 @@ Rules:
 - No two days may have the same angle. Same topic is fine if the angle is different (e.g. coffee-as-morning-ritual vs coffee-as-afternoon-pickup).
 - Mix content types across the week: product highlights, atmosphere/vibe, community moments, behind-the-scenes, seasonal.
 - Monday posts acknowledge the café is closed (anticipation-style: "see you tomorrow", a recipe tip, or a personal moment).
-- Each day must have a clear theme, a distinct angle, platform differences, and a tone note.
+- Each day must have a clear theme, a distinct angle, platform differences, and a tone note.${photoRules}
 
 Respond with valid JSON only. No markdown, no explanation outside the JSON.`
 }
 
-export function buildPlanUserPrompt(client: ClientProfile): string {
+export function buildPlanUserPrompt(
+  client: ClientProfile,
+  photos: AnalyzedPhoto[]
+): string {
+  const photoSection =
+    photos.length > 0
+      ? `\n\nAvailable photos for this week:\n${photos
+          .map(
+            (p, i) =>
+              `Photo ${i + 1} (ID: ${p.id}):\n  Subjects: ${p.analysis.subjects.join(", ")}\n  Mood: ${p.analysis.mood}\n  Setting: ${p.analysis.setting}\n  Season: ${p.analysis.season ?? "not detectable"}\n  Brand angles: ${p.analysis.brandAngles.join(", ")}`
+          )
+          .join("\n\n")}`
+      : "\n\nNo photos available this week. All days are text-only (photoId: null for every day)."
+
   return `Create a 7-day content plan for this client:
 
 Business: ${client.name}
@@ -25,7 +47,7 @@ Vibe: ${client.vibe}
 Menu highlights: ${client.menuHighlights.join(", ")}
 Owner persona: ${client.ownerPersona.name}, ${client.ownerPersona.age}. ${client.ownerPersona.style}
 Target customers: ${client.targetCustomers.join(", ")}
-Platforms: ${client.platforms.join(" + ")}
+Platforms: ${client.platforms.join(" + ")}${photoSection}
 
 Respond with this exact JSON structure:
 {
@@ -35,7 +57,8 @@ Respond with this exact JSON structure:
       "theme": "what this day's posts are about",
       "angle": "what makes this day's post unique",
       "platformDifferences": "how IG differs from FB for this day",
-      "toneNote": "mood or style cue"
+      "toneNote": "mood or style cue",
+      "photoId": "photo-id-here or null"
     }
   ]
 }
@@ -71,14 +94,23 @@ Respond with valid JSON only. No markdown, no explanation outside the JSON.`
 
 export function buildWriteUserPrompt(
   client: ClientProfile,
-  plan: DayPlan[]
+  plan: DayPlan[],
+  photos: AnalyzedPhoto[]
 ): string {
+  const photoMap = new Map(photos.map((p) => [p.id, p]))
+
   const planText = plan
-    .map(
-      (day) =>
-        `${day.day}: Theme="${day.theme}", Angle="${day.angle}", Platform diff="${day.platformDifferences}", Tone="${day.toneNote}"`
-    )
-    .join("\n")
+    .map((day) => {
+      const base = `${day.day}: Theme="${day.theme}", Angle="${day.angle}", Platform diff="${day.platformDifferences}", Tone="${day.toneNote}"`
+      if (day.photoId) {
+        const photo = photoMap.get(day.photoId)
+        if (photo) {
+          return `${base}\n  → PHOTO DAY: This post is grounded in a photo. The photo shows: ${photo.analysis.visualDetails}\n  Mood: ${photo.analysis.mood}. Setting: ${photo.analysis.setting}. Use these details to write an authentic post that tells the brand's story through what's in the photo.`
+        }
+      }
+      return `${base}\n  → TEXT-ONLY DAY: No photo. Write a standalone post.`
+    })
+    .join("\n\n")
 
   return `Write posts for each day based on this content plan:
 
@@ -88,6 +120,8 @@ Business context:
 - Menu: ${client.menuHighlights.join(", ")}
 - Customers: ${client.targetCustomers.join(", ")}
 - Closed Monday (Monday post = anticipation or personal content)
+
+For photo days: write posts that are grounded in what the photo shows. Don't just describe the photo — tell the brand's story through it. Combine what you see with the brand voice and the mood the photo conveys.
 
 Respond with this exact JSON structure:
 {
