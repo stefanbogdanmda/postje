@@ -168,6 +168,9 @@ export async function POST() {
       },
       plan: plan.days,
       posts: postsWithPhotos,
+      photoAnalyses: Object.fromEntries(
+        analyzedPhotos.map((p) => [p.id, p.analysis])
+      ),
       metadata: {
         generatedAt: new Date().toISOString(),
         model: MODEL,

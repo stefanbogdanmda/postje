@@ -51,6 +51,7 @@ export interface GenerationResult {
   client: { name: string; type: string; location: string }
   plan: DayPlan[]
   posts: DayPosts[]
+  photoAnalyses: Record<string, PhotoAnalysis>
   metadata: {
     generatedAt: string
     model: string
