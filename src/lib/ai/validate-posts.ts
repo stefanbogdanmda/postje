@@ -18,9 +18,9 @@ function splitSentences(text: string): string[] {
  * Returns posts with a warnings array attached to each day.
  */
 export function validatePosts(
-  posts: Omit<DayPosts, "warnings">[],
+  posts: Omit<DayPosts, "warnings" | "photoId" | "photoUrl">[],
   bannedPhrases: string[]
-): DayPosts[] {
+): Omit<DayPosts, "photoId" | "photoUrl">[] {
   return posts.map((post) => {
     const warnings: PostWarning[] = []
 
