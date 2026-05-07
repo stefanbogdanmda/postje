@@ -1,7 +1,73 @@
 "use client"
 
 import { useState } from "react"
-import type { GenerationResult } from "@/lib/ai/types"
+import type { GenerationResult, PhotoAnalysis } from "@/lib/ai/types"
+
+function PhotoAnalysisPanel({ analysis }: { analysis: PhotoAnalysis }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      style={{
+        borderTop: "1px solid #eee",
+        paddingTop: "12px",
+        marginTop: "12px",
+      }}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "12px",
+          color: "#888",
+          padding: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        }}
+      >
+        <span style={{ fontSize: "10px" }}>{open ? "▼" : "▶"}</span>
+        What Claude saw in this photo
+      </button>
+      {open && (
+        <div
+          style={{
+            marginTop: "8px",
+            fontSize: "12px",
+            color: "#666",
+            backgroundColor: "#f9fafb",
+            padding: "12px",
+            borderRadius: "4px",
+          }}
+        >
+          <p style={{ marginBottom: "6px" }}>
+            <strong>Subjects:</strong> {analysis.subjects.join(", ")}
+          </p>
+          <p style={{ marginBottom: "6px" }}>
+            <strong>Mood:</strong> {analysis.mood}
+          </p>
+          {analysis.season && (
+            <p style={{ marginBottom: "6px" }}>
+              <strong>Season:</strong> {analysis.season}
+            </p>
+          )}
+          <p style={{ marginBottom: "6px" }}>
+            <strong>Setting:</strong> {analysis.setting}
+          </p>
+          <p style={{ marginBottom: "6px" }}>
+            <strong>Brand angles:</strong>{" "}
+            {analysis.brandAngles.join(", ")}
+          </p>
+          <p>
+            <strong>Details:</strong> {analysis.visualDetails}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function GeneratePreviewPage() {
   const [result, setResult] = useState<GenerationResult | null>(null)
@@ -81,12 +147,18 @@ export default function GeneratePreviewPage() {
               result.metadata.planOutputTokens +
               result.metadata.postsInputTokens +
               result.metadata.postsOutputTokens}{" "}
-            total
+            total · Photos: {result.metadata.photosUsed}
           </p>
 
           {/* Posts by day */}
           {result.posts.map((post) => {
             const dayPlan = result.plan.find((p) => p.day === post.day)
+            const isPhotoDay = post.photoId !== null && post.photoUrl !== null
+            const photoAnalysis =
+              post.photoId && result.photoAnalyses[post.photoId]
+                ? result.photoAnalyses[post.photoId]
+                : null
+
             return (
               <div
                 key={post.day}
@@ -105,9 +177,24 @@ export default function GeneratePreviewPage() {
                     marginBottom: "16px",
                   }}
                 >
-                  <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
-                    {post.day}
-                  </h2>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                    <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
+                      {post.day}
+                    </h2>
+                    {isPhotoDay && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          backgroundColor: "#dbeafe",
+                          color: "#1d4ed8",
+                          padding: "2px 8px",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        Photo post
+                      </span>
+                    )}
+                  </div>
                   {dayPlan && (
                     <span style={{ fontSize: "12px", color: "#888" }}>
                       {dayPlan.theme} · {dayPlan.angle}
@@ -115,55 +202,108 @@ export default function GeneratePreviewPage() {
                   )}
                 </div>
 
-                {/* Instagram */}
-                <div style={{ marginBottom: "12px" }}>
-                  <h3
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      color: "#be185d",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Instagram
-                  </h3>
-                  <p
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      backgroundColor: "#f9fafb",
-                      padding: "12px",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {post.instagramCaption}
-                  </p>
-                </div>
+                {isPhotoDay ? (
+                  /* Photo day: side-by-side platform previews */
+                  <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
+                    {/* Instagram preview */}
+                    <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden", border: "1px solid #eee" }}>
+                      <img
+                        src={post.photoUrl!}
+                        alt={`Photo for ${post.day}`}
+                        style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }}
+                      />
+                      <div style={{ padding: "12px" }}>
+                        <h3
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            color: "#be185d",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Instagram
+                        </h3>
+                        <p style={{ whiteSpace: "pre-wrap", fontSize: "14px" }}>
+                          {post.instagramCaption}
+                        </p>
+                      </div>
+                    </div>
 
-                {/* Facebook */}
-                <div style={{ marginBottom: "12px" }}>
-                  <h3
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      color: "#1d4ed8",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Facebook
-                  </h3>
-                  <p
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      backgroundColor: "#f9fafb",
-                      padding: "12px",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {post.facebookPost}
-                  </p>
-                </div>
+                    {/* Facebook preview */}
+                    <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden", border: "1px solid #eee" }}>
+                      <img
+                        src={post.photoUrl!}
+                        alt={`Photo for ${post.day}`}
+                        style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }}
+                      />
+                      <div style={{ padding: "12px" }}>
+                        <h3
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            color: "#1d4ed8",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Facebook
+                        </h3>
+                        <p style={{ whiteSpace: "pre-wrap", fontSize: "14px" }}>
+                          {post.facebookPost}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Text-only day: existing layout */
+                  <>
+                    <div style={{ marginBottom: "12px" }}>
+                      <h3
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          color: "#be185d",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Instagram
+                      </h3>
+                      <p
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          backgroundColor: "#f9fafb",
+                          padding: "12px",
+                          borderRadius: "4px",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {post.instagramCaption}
+                      </p>
+                    </div>
+                    <div style={{ marginBottom: "12px" }}>
+                      <h3
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          color: "#1d4ed8",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Facebook
+                      </h3>
+                      <p
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          backgroundColor: "#f9fafb",
+                          padding: "12px",
+                          borderRadius: "4px",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {post.facebookPost}
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 {/* Warnings */}
                 {post.warnings.length > 0 && (
@@ -187,6 +327,11 @@ export default function GeneratePreviewPage() {
                       ))}
                     </ul>
                   </div>
+                )}
+
+                {/* Photo analysis panel (collapsible) */}
+                {isPhotoDay && photoAnalysis && (
+                  <PhotoAnalysisPanel analysis={photoAnalysis} />
                 )}
 
                 {/* Reasoning + Summary */}
