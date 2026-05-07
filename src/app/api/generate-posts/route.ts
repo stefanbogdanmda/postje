@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
 import { validatePosts } from "@/lib/ai/validate-posts"
-import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
+import { cafeDeHoek, CAFE_DE_HOEK_CLIENT_ID } from "@/data/clients/cafe-de-hoek"
 import type {
   WeeklyPlan,
   DayPosts,
@@ -21,7 +21,6 @@ import type {
 } from "@/lib/ai/types"
 
 const MODEL = "claude-sonnet-4-6"
-const CAFE_DE_HOEK_CLIENT_ID = "cafe-de-hoek-placeholder"
 
 export const maxDuration = 60
 
