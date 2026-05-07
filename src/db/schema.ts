@@ -4,6 +4,7 @@ import {
   integer,
   primaryKey,
 } from "drizzle-orm/sqlite-core"
+import type { PhotoAnalysis } from "@/lib/ai/types"
 
 // ──────────────────────────────────────────────
 // users — one row per person (clients and Stefan)
@@ -50,6 +51,28 @@ export const clients = sqliteTable("clients", {
     .notNull()
     .$defaultFn(() => new Date()),
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+})
+
+// ──────────────────────────────────────────────
+// photos — client photos for post generation
+// ──────────────────────────────────────────────
+export const photos = sqliteTable("photos", {
+  id: text("id")
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  clientId: text("clientId")
+    .notNull()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  blobUrl: text("blobUrl").notNull(),
+  originalFilename: text("originalFilename").notNull(),
+  mimeType: text("mimeType").notNull(),
+  sizeBytes: integer("sizeBytes").notNull(),
+  analysis: text("analysis", { mode: "json" }).$type<PhotoAnalysis>(),
+  analyzedAt: integer("analyzedAt", { mode: "timestamp_ms" }),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
