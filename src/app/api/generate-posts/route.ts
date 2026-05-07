@@ -94,6 +94,7 @@ export async function POST() {
         planOutputTokens: planResponse.usage.output_tokens,
         postsInputTokens: writeResponse.usage.input_tokens,
         postsOutputTokens: writeResponse.usage.output_tokens,
+        photosUsed: 0,
       },
     }
 
