@@ -1,5 +1,8 @@
 import type { ClientProfile } from "@/lib/ai/types"
 
+/** Stable ID used by the seed script and the generation pipeline. */
+export const CAFE_DE_HOEK_CLIENT_ID = "cafe-de-hoek-00000000"
+
 export const cafeDeHoek: ClientProfile = {
   name: "Café de Hoek",
   type: "Café/lunchroom (no dinner service)",
