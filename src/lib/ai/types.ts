@@ -23,6 +23,7 @@ export interface DayPlan {
   angle: string
   platformDifferences: string
   toneNote: string
+  photoId: string | null
 }
 
 export interface WeeklyPlan {
@@ -42,6 +43,8 @@ export interface DayPosts {
   reasoning: string
   englishSummary: string
   warnings: PostWarning[]
+  photoId: string | null
+  photoUrl: string | null
 }
 
 export interface GenerationResult {
@@ -55,5 +58,39 @@ export interface GenerationResult {
     planOutputTokens: number
     postsInputTokens: number
     postsOutputTokens: number
+    photosUsed: number
   }
+}
+
+export interface PhotoAnalysis {
+  subjects: string[]
+  mood: string
+  season: string | null
+  setting: string
+  brandAngles: string[]
+  visualDetails: string
+}
+
+export interface PhotoRow {
+  id: string
+  clientId: string
+  blobUrl: string
+  originalFilename: string
+  mimeType: string
+  sizeBytes: number
+  analysis: PhotoAnalysis | null
+  analyzedAt: Date | null
+  createdAt: Date
+}
+
+export interface AnalyzedPhoto {
+  id: string
+  blobUrl: string
+  analysis: PhotoAnalysis
+}
+
+export interface UploadResult {
+  photo: PhotoRow
+  analysisStatus: "succeeded" | "failed"
+  error?: string
 }
