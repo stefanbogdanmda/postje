@@ -3,6 +3,8 @@ import {
   text,
   integer,
   primaryKey,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 import type { PhotoAnalysis } from "@/lib/ai/types"
 
@@ -76,6 +78,53 @@ export const photos = sqliteTable("photos", {
     .notNull()
     .$defaultFn(() => new Date()),
 })
+
+// ──────────────────────────────────────────────
+// posts — generated social media posts, one row per platform per day
+// ──────────────────────────────────────────────
+export const posts = sqliteTable(
+  "posts",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    clientId: text("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    platform: text("platform", { enum: ["instagram", "facebook"] }).notNull(),
+    scheduledDate: text("scheduledDate").notNull(),
+    status: text("status", {
+      enum: ["draft", "approved", "rejected", "published", "failed"],
+    })
+      .notNull()
+      .default("draft"),
+    content: text("content").notNull(),
+    photoId: text("photoId").references(() => photos.id),
+    reasoning: text("reasoning").notNull(),
+    publishAt: integer("publishAt", { mode: "timestamp_ms" }),
+    rejectionCount: integer("rejectionCount").notNull().default(0),
+    approvedAt: integer("approvedAt", { mode: "timestamp_ms" }),
+    rejectedAt: integer("rejectedAt", { mode: "timestamp_ms" }),
+    publishedAt: integer("publishedAt", { mode: "timestamp_ms" }),
+    publishError: text("publishError"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index("posts_client_date_idx").on(t.clientId, t.scheduledDate),
+    index("posts_status_publish_idx").on(t.status, t.publishAt),
+    uniqueIndex("posts_client_date_platform_idx").on(
+      t.clientId,
+      t.scheduledDate,
+      t.platform
+    ),
+  ]
+)
 
 // ──────────────────────────────────────────────
 // accounts — Auth.js requirement, links users to auth providers
