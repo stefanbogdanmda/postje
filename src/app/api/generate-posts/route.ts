@@ -206,13 +206,17 @@ export async function POST(request: NextRequest) {
     }> = []
 
     const openDatesSet = new Set(openDates)
+    let droppedLockedCount = 0
 
     for (const post of validatedPosts) {
       const scheduledDate = dayNameToDate(post.day, startDate)
 
       // Skip posts for locked days — Claude sometimes plans them despite
       // being told not to. The unique index would reject them anyway.
-      if (!openDatesSet.has(scheduledDate)) continue
+      if (!openDatesSet.has(scheduledDate)) {
+        droppedLockedCount++
+        continue
+      }
 
       const dayPlan = plan.days.find((d) => d.day === post.day)
       const photoId = dayPlan?.photoId ?? null
@@ -240,6 +244,12 @@ export async function POST(request: NextRequest) {
         rejectionCount:
           rejectionCounts.get(`${scheduledDate}:facebook`) ?? 0,
       })
+    }
+
+    if (droppedLockedCount > 0) {
+      console.warn(
+        `[generate-posts] Claude planned content for ${droppedLockedCount} locked day(s); dropped before insert`
+      )
     }
 
     // Atomically delete old posts and insert new ones.
