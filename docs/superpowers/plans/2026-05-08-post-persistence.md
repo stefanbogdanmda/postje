@@ -31,6 +31,19 @@
 | `src/lib/posts/__tests__/dates.test.ts` | Create | Date utility tests |
 | `src/lib/posts/__tests__/repository.test.ts` | Create | Repository tests |
 | `src/lib/posts/__tests__/locked-days.test.ts` | Create | Locked-day prompt builder tests |
+| `src/lib/posts/__tests__/generate-posts.test.ts` | Create | Generation API integration test (mocked Claude) |
+
+---
+
+### Task 0: Create feature branch
+
+- [ ] **Step 1: Create and switch to feature branch**
+
+```bash
+git checkout -b feat/post-persistence
+```
+
+All subsequent commits in this plan land on this branch, not main.
 
 ---
 
@@ -1023,6 +1036,8 @@ git commit -m "feat: add locked-day prompt context builder"
 **Files:**
 - Modify: `src/lib/ai/prompts.ts`
 
+**Caller check:** `buildPlanUserPrompt` has exactly one caller in source code: `src/app/api/generate-posts/route.ts:63`. No tests call it. The default parameter `""` is safe — no other caller will be silently affected.
+
 - [ ] **Step 1: Add lockedDaysContext parameter to buildPlanUserPrompt**
 
 In `src/lib/ai/prompts.ts`, change the signature of `buildPlanUserPrompt` from:
@@ -1080,32 +1095,10 @@ git commit -m "feat: add locked-day context parameter to plan prompt"
 
 **Files:**
 - Modify: `src/app/api/generate-posts/route.ts`
-- Modify: `src/lib/ai/types.ts`
 
-This is the largest change. The API goes from returning post content to writing it to the DB and returning a pointer.
+This is the largest change. The API goes from returning post content to writing it to the DB and returning a pointer. `GeneratePostsRequest` and `GeneratePostsResponse` are already defined in `src/lib/posts/types.ts` (Task 3) — the route imports them from there.
 
-- [ ] **Step 1: Add GeneratePostsRequest and GeneratePostsResponse to the AI types**
-
-In `src/lib/ai/types.ts`, add at the end of the file:
-
-```typescript
-/** Request body for POST /api/generate-posts */
-export interface GeneratePostsRequest {
-  clientId: string
-  startDate: string
-}
-
-/** Response body from POST /api/generate-posts */
-export interface GeneratePostsResponse {
-  clientId: string
-  startDate: string
-  endDate: string
-  generatedCount: number
-  skippedLockedCount: number
-}
-```
-
-- [ ] **Step 2: Rewrite the route handler**
+- [ ] **Step 1: Rewrite the route handler**
 
 Replace the entire contents of `src/app/api/generate-posts/route.ts` with:
 
@@ -1136,9 +1129,8 @@ import type {
   DayPosts,
   AnalyzedPhoto,
   PhotoAnalysis,
-  GeneratePostsRequest,
-  GeneratePostsResponse,
 } from "@/lib/ai/types"
+import type { GeneratePostsRequest, GeneratePostsResponse } from "@/lib/posts/types"
 import type { Platform } from "@/lib/posts/config"
 
 const MODEL = "claude-sonnet-4-6"
@@ -1369,16 +1361,236 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 3: Verify build**
+- [ ] **Step 2: Verify build**
 
 Run: `npx next build`
 Expected: Build succeeds
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/app/api/generate-posts/route.ts src/lib/ai/types.ts
+git add src/app/api/generate-posts/route.ts
 git commit -m "feat: rewrite generation API to persist posts to database"
+```
+
+---
+
+### Task 8b: Integration test for generation API
+
+**Files:**
+- Create: `src/lib/posts/__tests__/generate-posts.test.ts`
+
+This test exercises the generation flow end-to-end with a mocked Anthropic client. It verifies the orchestration logic — locked-day detection, rejection count carry-forward, prompt assembly, and DB persistence — without calling the real Claude API.
+
+- [ ] **Step 1: Write the integration test**
+
+Create `src/lib/posts/__tests__/generate-posts.test.ts`:
+
+```typescript
+import { describe, it, expect, beforeEach, vi } from "vitest"
+import { createTestDb, seedTestClient, type TestDb } from "@/test/db"
+import {
+  insertPosts,
+  getPostsByDateRange,
+  readRejectionCounts,
+  replacePostsForOpenDays,
+  getLockedDays,
+} from "../repository"
+import { buildLockedDaysContext } from "../locked-days"
+import { dayNameToDate, getDateRange } from "../dates"
+import type { Platform } from "../config"
+
+/**
+ * This test simulates the generation route's orchestration logic
+ * without touching the Anthropic API or Next.js route handler.
+ * It uses the same functions the route calls, in the same order.
+ */
+
+let db: TestDb
+const CLIENT_ID = "test-client-001"
+const START_DATE = "2026-05-12" // a Tuesday
+
+function makePostRow(overrides: Partial<{
+  platform: Platform
+  scheduledDate: string
+  status: "draft" | "approved" | "rejected" | "published" | "failed"
+  content: string
+  reasoning: string
+  photoId: string | null
+  rejectionCount: number
+}> = {}) {
+  return {
+    clientId: CLIENT_ID,
+    platform: (overrides.platform ?? "instagram") as Platform,
+    scheduledDate: overrides.scheduledDate ?? "2026-05-12",
+    status: overrides.status ?? "draft",
+    content: overrides.content ?? "Test content",
+    reasoning: overrides.reasoning ?? "Test reasoning",
+    photoId: overrides.photoId ?? null,
+    rejectionCount: overrides.rejectionCount ?? 0,
+  }
+}
+
+/** Simulate Claude returning posts for given day names. */
+function mockClaudeOutput(dayNames: string[]) {
+  return dayNames.map((day) => ({
+    day,
+    instagramCaption: `IG post for ${day}`,
+    facebookPost: `FB post for ${day}`,
+    reasoning: `Reasoning for ${day}`,
+  }))
+}
+
+beforeEach(() => {
+  db = createTestDb()
+  seedTestClient(db, CLIENT_ID)
+})
+
+describe("generation orchestration", () => {
+  it("detects locked days and skips them during generation", () => {
+    // Monday approved (locked), rest are open
+    const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
+    const wednesdayDate = dayNameToDate("Wednesday", START_DATE)
+
+    insertPosts(db, [
+      makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved" }),
+      makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "approved" }),
+    ])
+
+    const dateRange = getDateRange(START_DATE)
+    const endDate = dateRange[dateRange.length - 1]
+    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
+    const openDates = dateRange.filter((d) => !lockedDates.has(d))
+
+    expect(lockedDays).toHaveLength(1)
+    expect(lockedDays[0].scheduledDate).toBe(tuesdayDate)
+    expect(openDates).toHaveLength(6)
+    expect(openDates).not.toContain(tuesdayDate)
+  })
+
+  it("includes locked-day context in plan prompt", () => {
+    const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
+    insertPosts(db, [
+      makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved", photoId: "photo-1" }),
+      makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "approved", photoId: "photo-1" }),
+    ])
+
+    const dateRange = getDateRange(START_DATE)
+    const endDate = dateRange[dateRange.length - 1]
+    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
+    const openDates = dateRange.filter((d) => !lockedDates.has(d))
+
+    const context = buildLockedDaysContext(lockedDays, openDates)
+
+    expect(context).toContain("LOCKED:")
+    expect(context).toContain(`${tuesdayDate}: photo assigned`)
+    expect(context).toContain("OPEN (plan these):")
+  })
+
+  it("carries rejection counts forward through regeneration", () => {
+    const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
+
+    // Insert rejected posts with count=2
+    insertPosts(db, [
+      makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "rejected", rejectionCount: 2 }),
+      makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "rejected", rejectionCount: 2 }),
+    ])
+
+    // Read counts BEFORE Claude call (read-only)
+    const counts = readRejectionCounts(db, CLIENT_ID, [tuesdayDate])
+    expect(counts.get(`${tuesdayDate}:instagram`)).toBe(2)
+    expect(counts.get(`${tuesdayDate}:facebook`)).toBe(2)
+
+    // Simulate Claude output
+    const claudeOutput = mockClaudeOutput(["Tuesday"])
+
+    // Build replacement rows with inherited counts
+    const newRows = claudeOutput.flatMap((post) => {
+      const scheduledDate = dayNameToDate(post.day, START_DATE)
+      return (["instagram", "facebook"] as Platform[]).map((platform) => ({
+        clientId: CLIENT_ID,
+        platform,
+        scheduledDate,
+        content: platform === "instagram" ? post.instagramCaption : post.facebookPost,
+        reasoning: post.reasoning,
+        photoId: null,
+        rejectionCount: counts.get(`${scheduledDate}:${platform}`) ?? 0,
+      }))
+    })
+
+    // Atomic replace
+    replacePostsForOpenDays(db, CLIENT_ID, [tuesdayDate], newRows)
+
+    // Verify counts carried forward
+    const result = getPostsByDateRange(db, CLIENT_ID, tuesdayDate, tuesdayDate)
+    expect(result).toHaveLength(2)
+    expect(result[0].rejectionCount).toBe(2)
+    expect(result[1].rejectionCount).toBe(2)
+    expect(result[0].status).toBe("draft")
+  })
+
+  it("persists posts with correct scheduledDates from day names", () => {
+    const claudeOutput = mockClaudeOutput(["Tuesday", "Wednesday", "Thursday"])
+
+    const newRows = claudeOutput.flatMap((post) => {
+      const scheduledDate = dayNameToDate(post.day, START_DATE)
+      return (["instagram", "facebook"] as Platform[]).map((platform) => ({
+        clientId: CLIENT_ID,
+        platform,
+        scheduledDate,
+        content: platform === "instagram" ? post.instagramCaption : post.facebookPost,
+        reasoning: post.reasoning,
+        photoId: null,
+        rejectionCount: 0,
+      }))
+    })
+
+    replacePostsForOpenDays(db, CLIENT_ID, getDateRange(START_DATE), newRows)
+
+    const result = getPostsByDateRange(db, CLIENT_ID, START_DATE, dayNameToDate("Monday", START_DATE))
+    expect(result).toHaveLength(6) // 3 days x 2 platforms
+
+    const tuesdayPosts = result.filter((p) => p.scheduledDate === "2026-05-12")
+    expect(tuesdayPosts).toHaveLength(2)
+    expect(tuesdayPosts.find((p) => p.platform === "instagram")?.content).toBe("IG post for Tuesday")
+
+    const wednesdayPosts = result.filter((p) => p.scheduledDate === "2026-05-13")
+    expect(wednesdayPosts).toHaveLength(2)
+  })
+
+  it("returns early when all days are locked (no Claude call needed)", () => {
+    const dateRange = getDateRange(START_DATE)
+
+    // Approve all 7 days
+    const allRows = dateRange.flatMap((date) => [
+      makePostRow({ platform: "instagram", scheduledDate: date, status: "approved" }),
+      makePostRow({ platform: "facebook", scheduledDate: date, status: "approved" }),
+    ])
+    insertPosts(db, allRows)
+
+    const endDate = dateRange[dateRange.length - 1]
+    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
+    const openDates = dateRange.filter((d) => !lockedDates.has(d))
+
+    expect(openDates).toHaveLength(0)
+    // Route would return early here — no Claude call made
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it passes**
+
+Run: `npx vitest run src/lib/posts/__tests__/generate-posts.test.ts`
+Expected: All 5 tests PASS
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/lib/posts/__tests__/generate-posts.test.ts
+git commit -m "test: add integration tests for generation orchestration"
 ```
 
 ---
@@ -1708,15 +1920,20 @@ Replace the `{result && (` rendering block with a new block that reads from the 
       )}
 ```
 
-- [ ] **Step 4: Remove unused imports**
+- [ ] **Step 4: Clean up imports, keep PhotoAnalysisPanel**
 
-Remove the `GenerationResult` and `PhotoAnalysis` imports from the top of the file. Remove the `PhotoAnalysisPanel` component (no longer used — photo analysis display will be part of the review UI). The import line becomes:
+Remove the `GenerationResult` import (no longer used). Keep `PhotoAnalysis` and `PhotoAnalysisPanel` — the preview is Stefan's debugging surface, and seeing what Claude saw in each photo is useful for prompt tuning. The GET endpoint returns `photoId` per post; the preview page can fetch photo analysis from the existing photos data if needed.
+
+Update the import line:
 
 ```typescript
 "use client"
 
 import { useState } from "react"
+import type { PhotoAnalysis } from "@/lib/ai/types"
 ```
+
+Note: `PhotoAnalysisPanel` currently reads from `result.photoAnalyses` which no longer exists in the two-call flow. To keep it working, the GET `/api/posts` response would need photo analysis data, OR the preview page makes a third call to fetch photos. For Saturday's deadline, the simplest fix: keep the component in the file but don't render it in the new layout. Add a `// TODO: Re-wire PhotoAnalysisPanel once GET /api/posts includes photo data` comment where it was rendered. This avoids silently dropping the feature while keeping the ship deadline.
 
 - [ ] **Step 5: Verify build**
 
@@ -1776,7 +1993,38 @@ Expected:
 Run: `curl "http://localhost:3000/api/posts?clientId=cafe-de-hoek-00000000&startDate=2026-05-12&endDate=2026-05-18"`
 Expected: JSON response with posts grouped by `scheduledDate`
 
-- [ ] **Step 7: Final commit (if any fixes were needed)**
+- [ ] **Step 7: Test partial regeneration with a locked day**
+
+Using Drizzle Studio (`npx drizzle-kit studio`), manually change one day's two posts (e.g., Tuesday IG + FB) from `draft` to `approved`.
+
+Then click "Generate Week" again on the preview page.
+Expected:
+- Tuesday's posts are untouched (still `approved` in DB)
+- The other 6 days get new drafts
+- Check the server logs: the plan prompt should include locked-day context mentioning Tuesday
+- DB has 14 rows total: 2 approved (Tuesday) + 12 draft (other days)
+
+- [ ] **Step 8: Test rejection count carry-forward**
+
+Using Drizzle Studio, change Wednesday's two posts to `rejected` with `rejectionCount = 2`.
+
+Click "Generate Week" again.
+Expected:
+- Wednesday gets new draft posts
+- The new Wednesday rows have `rejectionCount = 2` (carried forward)
+- Tuesday still untouched (`approved`)
+
+- [ ] **Step 9: Test all-locked early return**
+
+Using Drizzle Studio, change all remaining draft posts to `approved`.
+
+Click "Generate Week."
+Expected:
+- Response comes back immediately (no ~15-30 second wait — no Claude call)
+- `generatedCount: 0`, `skippedLockedCount: 7`
+- DB unchanged
+
+- [ ] **Step 10: Final commit (if any fixes were needed)**
 
 ```bash
 git add -A
