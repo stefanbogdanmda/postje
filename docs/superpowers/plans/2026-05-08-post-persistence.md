@@ -1920,20 +1920,17 @@ Replace the `{result && (` rendering block with a new block that reads from the 
       )}
 ```
 
-- [ ] **Step 4: Clean up imports, keep PhotoAnalysisPanel**
+- [ ] **Step 4: Remove PhotoAnalysisPanel and clean up imports**
 
-Remove the `GenerationResult` import (no longer used). Keep `PhotoAnalysis` and `PhotoAnalysisPanel` — the preview is Stefan's debugging surface, and seeing what Claude saw in each photo is useful for prompt tuning. The GET endpoint returns `photoId` per post; the preview page can fetch photo analysis from the existing photos data if needed.
+Remove the `GenerationResult` import, the `PhotoAnalysis` import, and the entire `PhotoAnalysisPanel` component definition. The component's data source (`result.photoAnalyses`) no longer exists in the two-call flow, and keeping dead code is worse than removing it cleanly. The carry-forward notes at the bottom of this plan track restoring it for the review UI.
 
-Update the import line:
+The import section becomes:
 
 ```typescript
 "use client"
 
 import { useState } from "react"
-import type { PhotoAnalysis } from "@/lib/ai/types"
 ```
-
-Note: `PhotoAnalysisPanel` currently reads from `result.photoAnalyses` which no longer exists in the two-call flow. To keep it working, the GET `/api/posts` response would need photo analysis data, OR the preview page makes a third call to fetch photos. For Saturday's deadline, the simplest fix: keep the component in the file but don't render it in the new layout. Add a `// TODO: Re-wire PhotoAnalysisPanel once GET /api/posts includes photo data` comment where it was rendered. This avoids silently dropping the feature while keeping the ship deadline.
 
 - [ ] **Step 5: Verify build**
 
@@ -1995,7 +1992,16 @@ Expected: JSON response with posts grouped by `scheduledDate`
 
 - [ ] **Step 7: Test partial regeneration with a locked day**
 
-Using Drizzle Studio (`npx drizzle-kit studio`), manually change one day's two posts (e.g., Tuesday IG + FB) from `draft` to `approved`.
+Approve Tuesday's posts via script (replace `YYYY-MM-DD` with the actual Tuesday date from Step 3):
+
+```bash
+npx tsx -e "
+import Database from 'better-sqlite3';
+const db = new Database('sqlite.db');
+db.prepare(\"UPDATE posts SET status = 'approved' WHERE scheduledDate = 'YYYY-MM-DD'\").run();
+console.log('Approved rows:', db.prepare(\"SELECT scheduledDate, platform, status FROM posts WHERE status = 'approved'\").all());
+"
+```
 
 Then click "Generate Week" again on the preview page.
 Expected:
@@ -2006,7 +2012,16 @@ Expected:
 
 - [ ] **Step 8: Test rejection count carry-forward**
 
-Using Drizzle Studio, change Wednesday's two posts to `rejected` with `rejectionCount = 2`.
+Reject Wednesday's posts with a count of 2 (replace date accordingly):
+
+```bash
+npx tsx -e "
+import Database from 'better-sqlite3';
+const db = new Database('sqlite.db');
+db.prepare(\"UPDATE posts SET status = 'rejected', rejectionCount = 2 WHERE scheduledDate = 'YYYY-MM-DD' AND status = 'draft'\").run();
+console.log('Rejected rows:', db.prepare(\"SELECT scheduledDate, platform, status, rejectionCount FROM posts WHERE status = 'rejected'\").all());
+"
+```
 
 Click "Generate Week" again.
 Expected:
@@ -2014,9 +2029,28 @@ Expected:
 - The new Wednesday rows have `rejectionCount = 2` (carried forward)
 - Tuesday still untouched (`approved`)
 
+Verify carry-forward:
+
+```bash
+npx tsx -e "
+import Database from 'better-sqlite3';
+const db = new Database('sqlite.db');
+console.log(db.prepare(\"SELECT scheduledDate, platform, status, rejectionCount FROM posts WHERE scheduledDate = 'YYYY-MM-DD'\").all());
+"
+```
+
 - [ ] **Step 9: Test all-locked early return**
 
-Using Drizzle Studio, change all remaining draft posts to `approved`.
+Approve all remaining draft posts:
+
+```bash
+npx tsx -e "
+import Database from 'better-sqlite3';
+const db = new Database('sqlite.db');
+db.prepare(\"UPDATE posts SET status = 'approved' WHERE status = 'draft'\").run();
+console.log('All posts:', db.prepare(\"SELECT scheduledDate, status FROM posts ORDER BY scheduledDate\").all());
+"
+```
 
 Click "Generate Week."
 Expected:
@@ -2041,3 +2075,4 @@ These items are NOT part of this plan. They belong in the client review UI featu
 2. **MAX_REJECTIONS UX** — disable reject button, notify Stefan
 3. **Time override on approval** — auto-fill `publishAt` from industry defaults, editable by Marloes
 4. **Photo display in review** — show photo above post content for photo days
+5. **PhotoAnalysisPanel removed in post-persistence** — restore in review UI when photo data flows through the GET endpoint. The component showed Claude's vision analysis (subjects, mood, setting, brand angles) per photo. Useful for Stefan's debugging during calibration. Original implementation was in `src/app/admin/generate-preview/page.tsx`.
