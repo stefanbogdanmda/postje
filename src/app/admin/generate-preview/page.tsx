@@ -1,94 +1,81 @@
 "use client"
 
 import { useState } from "react"
-import type { GenerationResult, PhotoAnalysis } from "@/lib/ai/types"
 
-function PhotoAnalysisPanel({ analysis }: { analysis: PhotoAnalysis }) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <div
-      style={{
-        borderTop: "1px solid #eee",
-        paddingTop: "12px",
-        marginTop: "12px",
-      }}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontSize: "12px",
-          color: "#888",
-          padding: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-        }}
-      >
-        <span style={{ fontSize: "10px" }}>{open ? "▼" : "▶"}</span>
-        What Claude saw in this photo
-      </button>
-      {open && (
-        <div
-          style={{
-            marginTop: "8px",
-            fontSize: "12px",
-            color: "#666",
-            backgroundColor: "#f9fafb",
-            padding: "12px",
-            borderRadius: "4px",
-          }}
-        >
-          <p style={{ marginBottom: "6px" }}>
-            <strong>Subjects:</strong> {analysis.subjects.join(", ")}
-          </p>
-          <p style={{ marginBottom: "6px" }}>
-            <strong>Mood:</strong> {analysis.mood}
-          </p>
-          {analysis.season && (
-            <p style={{ marginBottom: "6px" }}>
-              <strong>Season:</strong> {analysis.season}
-            </p>
-          )}
-          <p style={{ marginBottom: "6px" }}>
-            <strong>Setting:</strong> {analysis.setting}
-          </p>
-          <p style={{ marginBottom: "6px" }}>
-            <strong>Brand angles:</strong>{" "}
-            {analysis.brandAngles.join(", ")}
-          </p>
-          <p>
-            <strong>Details:</strong> {analysis.visualDetails}
-          </p>
-        </div>
-      )}
-    </div>
-  )
+/** Return the next Tuesday as an ISO date string (YYYY-MM-DD). */
+function getNextTuesday(): string {
+  const now = new Date()
+  const dayOfWeek = now.getDay() // 0=Sun, 1=Mon, 2=Tue
+  const daysUntilTuesday = ((2 - dayOfWeek + 7) % 7) || 7
+  const tuesday = new Date(now)
+  tuesday.setDate(now.getDate() + daysUntilTuesday)
+  return tuesday.toISOString().split("T")[0]
 }
 
 export default function GeneratePreviewPage() {
-  const [result, setResult] = useState<GenerationResult | null>(null)
+  const [posts, setPosts] = useState<
+    Array<{
+      scheduledDate: string
+      posts: Array<{
+        id: string
+        platform: string
+        content: string
+        photoId: string | null
+        reasoning: string
+        status: string
+        scheduledDate: string
+      }>
+    }>
+  | null>(null)
+  const [generationMeta, setGenerationMeta] = useState<{
+    generatedCount: number
+    skippedLockedCount: number
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleGenerate() {
     setLoading(true)
     setError(null)
-    setResult(null)
+    setPosts(null)
+    setGenerationMeta(null)
 
     try {
-      const response = await fetch("/api/generate-posts", { method: "POST" })
-      const data = await response.json()
+      // Step 1: Generate posts (writes to DB)
+      const startDate = getNextTuesday()
+      const genResponse = await fetch("/api/generate-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: "cafe-de-hoek-00000000",
+          startDate,
+        }),
+      })
+      const genData = await genResponse.json()
 
-      if (!response.ok) {
-        setError(data.error || "Generation failed")
+      if (!genResponse.ok) {
+        setError(genData.error || "Generation failed")
         return
       }
 
-      setResult(data)
+      setGenerationMeta({
+        generatedCount: genData.generatedCount,
+        skippedLockedCount: genData.skippedLockedCount,
+      })
+
+      // Step 2: Fetch persisted posts from DB
+      const endDate = genData.endDate
+      const postsResponse = await fetch(
+        `/api/posts?clientId=cafe-de-hoek-00000000&startDate=${startDate}&endDate=${endDate}`
+      )
+      const postsData = await postsResponse.json()
+
+      if (!postsResponse.ok) {
+        setError(postsData.error || "Failed to fetch posts")
+        return
+      }
+
+      setPosts(postsData)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Network error")
     } finally {
@@ -102,7 +89,7 @@ export default function GeneratePreviewPage() {
         Post Generation Preview
       </h1>
       <p style={{ color: "#666", marginBottom: "24px" }}>
-        Generate a week of posts for Café de Hoek. Takes ~15–30 seconds (two AI
+        Generate a week of posts for Cafe de Hoek. Takes ~15-30 seconds (two AI
         calls).
       </p>
 
@@ -118,7 +105,7 @@ export default function GeneratePreviewPage() {
           cursor: loading ? "not-allowed" : "pointer",
         }}
       >
-        {loading ? "Generating…" : "Generate Week"}
+        {loading ? "Generating..." : "Generate Week"}
       </button>
 
       {error && (
@@ -136,32 +123,23 @@ export default function GeneratePreviewPage() {
         </div>
       )}
 
-      {result && (
-        <div style={{ marginTop: "32px" }}>
-          {/* Metadata */}
-          <p style={{ fontSize: "12px", color: "#888", marginBottom: "24px" }}>
-            Generated at{" "}
-            {new Date(result.metadata.generatedAt).toLocaleString()} · Model:{" "}
-            {result.metadata.model} · Tokens:{" "}
-            {result.metadata.planInputTokens +
-              result.metadata.planOutputTokens +
-              result.metadata.postsInputTokens +
-              result.metadata.postsOutputTokens}{" "}
-            total · Photos: {result.metadata.photosUsed}
-          </p>
+      {generationMeta && (
+        <p style={{ fontSize: "12px", color: "#888", marginTop: "24px" }}>
+          Generated {generationMeta.generatedCount} post(s),
+          skipped {generationMeta.skippedLockedCount} locked day(s)
+        </p>
+      )}
 
-          {/* Posts by day */}
-          {result.posts.map((post) => {
-            const dayPlan = result.plan.find((p) => p.day === post.day)
-            const isPhotoDay = post.photoId !== null && post.photoUrl !== null
-            const photoAnalysis =
-              post.photoId && result.photoAnalyses[post.photoId]
-                ? result.photoAnalyses[post.photoId]
-                : null
+      {posts && (
+        <div style={{ marginTop: "24px" }}>
+          {posts.map((day) => {
+            const igPost = day.posts.find((p) => p.platform === "instagram")
+            const fbPost = day.posts.find((p) => p.platform === "facebook")
+            const isPhotoDay = igPost?.photoId !== null
 
             return (
               <div
-                key={post.day}
+                key={day.scheduledDate}
                 style={{
                   border: "1px solid #eee",
                   borderRadius: "8px",
@@ -179,7 +157,7 @@ export default function GeneratePreviewPage() {
                 >
                   <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
                     <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
-                      {post.day}
+                      {day.scheduledDate}
                     </h2>
                     {isPhotoDay && (
                       <span
@@ -195,161 +173,77 @@ export default function GeneratePreviewPage() {
                       </span>
                     )}
                   </div>
-                  {dayPlan && (
-                    <span style={{ fontSize: "12px", color: "#888" }}>
-                      {dayPlan.theme} · {dayPlan.angle}
-                    </span>
-                  )}
                 </div>
 
-                {isPhotoDay ? (
-                  /* Photo day: side-by-side platform previews */
-                  <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
-                    {/* Instagram preview */}
-                    <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden", border: "1px solid #eee" }}>
-                      <img
-                        src={post.photoUrl!}
-                        alt={`Photo for ${post.day}`}
-                        style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }}
-                      />
-                      <div style={{ padding: "12px" }}>
-                        <h3
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            color: "#be185d",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          Instagram
-                        </h3>
-                        <p style={{ whiteSpace: "pre-wrap", fontSize: "14px" }}>
-                          {post.instagramCaption}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Facebook preview */}
-                    <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden", border: "1px solid #eee" }}>
-                      <img
-                        src={post.photoUrl!}
-                        alt={`Photo for ${post.day}`}
-                        style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }}
-                      />
-                      <div style={{ padding: "12px" }}>
-                        <h3
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            color: "#1d4ed8",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          Facebook
-                        </h3>
-                        <p style={{ whiteSpace: "pre-wrap", fontSize: "14px" }}>
-                          {post.facebookPost}
-                        </p>
-                      </div>
-                    </div>
+                {/* Instagram */}
+                {igPost && (
+                  <div style={{ marginBottom: "12px" }}>
+                    <h3
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        color: "#be185d",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Instagram
+                    </h3>
+                    <p
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        backgroundColor: "#f9fafb",
+                        padding: "12px",
+                        borderRadius: "4px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {igPost.content}
+                    </p>
                   </div>
-                ) : (
-                  /* Text-only day: existing layout */
-                  <>
-                    <div style={{ marginBottom: "12px" }}>
-                      <h3
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          color: "#be185d",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        Instagram
-                      </h3>
-                      <p
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          backgroundColor: "#f9fafb",
-                          padding: "12px",
-                          borderRadius: "4px",
-                          fontSize: "14px",
-                        }}
-                      >
-                        {post.instagramCaption}
-                      </p>
-                    </div>
-                    <div style={{ marginBottom: "12px" }}>
-                      <h3
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          color: "#1d4ed8",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        Facebook
-                      </h3>
-                      <p
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          backgroundColor: "#f9fafb",
-                          padding: "12px",
-                          borderRadius: "4px",
-                          fontSize: "14px",
-                        }}
-                      >
-                        {post.facebookPost}
-                      </p>
-                    </div>
-                  </>
                 )}
 
-                {/* Warnings */}
-                {post.warnings.length > 0 && (
+                {/* Facebook */}
+                {fbPost && (
+                  <div style={{ marginBottom: "12px" }}>
+                    <h3
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        color: "#1d4ed8",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Facebook
+                    </h3>
+                    <p
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        backgroundColor: "#f9fafb",
+                        padding: "12px",
+                        borderRadius: "4px",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {fbPost.content}
+                    </p>
+                  </div>
+                )}
+
+                {/* Reasoning (from IG row -- same for both platforms) */}
+                {igPost && (
                   <div
                     style={{
-                      backgroundColor: "#fffbeb",
-                      border: "1px solid #fde68a",
-                      borderRadius: "4px",
-                      padding: "12px",
-                      marginBottom: "12px",
+                      borderTop: "1px solid #eee",
+                      paddingTop: "12px",
+                      fontSize: "13px",
+                      color: "#666",
                     }}
                   >
-                    <strong style={{ fontSize: "12px", color: "#92400e" }}>
-                      Warnings:
-                    </strong>
-                    <ul style={{ margin: "4px 0 0 16px", fontSize: "12px", color: "#92400e" }}>
-                      {post.warnings.map((w, i) => (
-                        <li key={i}>
-                          [{w.platform}] {w.detail}
-                        </li>
-                      ))}
-                    </ul>
+                    <p>
+                      <strong>Why:</strong> {igPost.reasoning}
+                    </p>
                   </div>
                 )}
-
-                {/* Photo analysis panel (collapsible) */}
-                {isPhotoDay && photoAnalysis && (
-                  <PhotoAnalysisPanel analysis={photoAnalysis} />
-                )}
-
-                {/* Reasoning + Summary */}
-                <div
-                  style={{
-                    borderTop: "1px solid #eee",
-                    paddingTop: "12px",
-                    fontSize: "13px",
-                    color: "#666",
-                  }}
-                >
-                  <p style={{ marginBottom: "4px" }}>
-                    <strong>Why:</strong> {post.reasoning}
-                  </p>
-                  <p>
-                    <strong>EN:</strong> {post.englishSummary}
-                  </p>
-                </div>
               </div>
             )
           })}
