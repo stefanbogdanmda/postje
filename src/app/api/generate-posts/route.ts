@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
 import { photos } from "@/db/schema"
 import { eq } from "drizzle-orm"
@@ -11,40 +11,83 @@ import {
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
 import { validatePosts } from "@/lib/ai/validate-posts"
-import { cafeDeHoek, CAFE_DE_HOEK_CLIENT_ID } from "@/data/clients/cafe-de-hoek"
+import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
+import {
+  readRejectionCounts,
+  replacePostsForOpenDays,
+  getLockedDays,
+} from "@/lib/posts/repository"
+import { buildLockedDaysContext } from "@/lib/posts/locked-days"
+import { dayNameToDate, getDateRange } from "@/lib/posts/dates"
 import type {
   WeeklyPlan,
   DayPosts,
-  GenerationResult,
   AnalyzedPhoto,
   PhotoAnalysis,
 } from "@/lib/ai/types"
+import type { GeneratePostsRequest, GeneratePostsResponse } from "@/lib/posts/types"
+import type { Platform } from "@/lib/posts/config"
 
 const MODEL = "claude-sonnet-4-6"
 
 export const maxDuration = 60
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const anthropic = getAnthropicClient()
+    // Parse and validate request
+    const body = (await request.json()) as GeneratePostsRequest
+    const { clientId, startDate } = body
 
-    // Load analyzed photos for this client
+    if (!clientId || !startDate) {
+      return NextResponse.json(
+        { error: "clientId and startDate are required" },
+        { status: 400 }
+      )
+    }
+
+    const dateRange = getDateRange(startDate)
+    const endDate = dateRange[dateRange.length - 1]
+
+    // Identify locked and open days
+    const lockedDays = getLockedDays(db, clientId, startDate, endDate)
+    const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
+    const openDates = dateRange.filter((d) => !lockedDates.has(d))
+
+    if (openDates.length === 0) {
+      return NextResponse.json({
+        clientId,
+        startDate,
+        endDate,
+        generatedCount: 0,
+        skippedLockedCount: lockedDays.length,
+      } satisfies GeneratePostsResponse)
+    }
+
+    // Read rejection counts BEFORE Claude call (read-only, no mutation)
+    const rejectionCounts = readRejectionCounts(db, clientId, openDates)
+
+    // Load client profile
+    // TODO(v2): Load from DB by clientId instead of hardcoded import
+    const clientProfile = cafeDeHoek
+
+    // Load analyzed photos
+    const anthropic = getAnthropicClient()
     const photoRows = await db
       .select()
       .from(photos)
-      .where(eq(photos.clientId, CAFE_DE_HOEK_CLIENT_ID))
+      .where(eq(photos.clientId, clientId))
 
-    // Filter to only analyzed photos — unanalyzed ones are skipped
     const unanalyzedCount = photoRows.filter((p) => p.analysis === null).length
     if (unanalyzedCount > 0) {
       console.warn(
-        `[generate-posts] Skipping ${unanalyzedCount} unanalyzed photo(s) for client ${CAFE_DE_HOEK_CLIENT_ID}`
+        `[generate-posts] Skipping ${unanalyzedCount} unanalyzed photo(s) for client ${clientId}`
       )
     }
 
     const analyzedPhotos: AnalyzedPhoto[] = photoRows
-      .filter((p): p is typeof p & { analysis: PhotoAnalysis } =>
-        p.analysis !== null
+      .filter(
+        (p): p is typeof p & { analysis: PhotoAnalysis } =>
+          p.analysis !== null
       )
       .map((p) => ({
         id: p.id,
@@ -52,7 +95,10 @@ export async function POST() {
         analysis: p.analysis,
       }))
 
-    // Stage 1: Generate content plan (text only — no vision cost)
+    // Build locked-day context for the plan prompt
+    const lockedDaysContext = buildLockedDaysContext(lockedDays, openDates)
+
+    // Stage 1: Generate content plan
     const planResponse = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 4000,
@@ -60,7 +106,11 @@ export async function POST() {
       messages: [
         {
           role: "user",
-          content: buildPlanUserPrompt(cafeDeHoek, analyzedPhotos),
+          content: buildPlanUserPrompt(
+            clientProfile,
+            analyzedPhotos,
+            lockedDaysContext
+          ),
         },
       ],
     })
@@ -83,20 +133,17 @@ export async function POST() {
       )
     }
 
-    // Build photo map for write stage
+    // Stage 2: Write posts
     const photoMap = new Map(analyzedPhotos.map((p) => [p.id, p]))
-
-    // Stage 2: Write posts based on plan
-    // Build content array — include photos for photo days via vision API
     const photoDays = plan.days.filter(
       (d) => d.photoId && photoMap.has(d.photoId)
     )
+
     const writeContent: Array<
       | { type: "text"; text: string }
       | { type: "image"; source: { type: "url"; url: string } }
     > = []
 
-    // Add photos for photo days so Claude can see them
     for (const day of photoDays) {
       const photo = photoMap.get(day.photoId!)!
       writeContent.push({
@@ -109,16 +156,15 @@ export async function POST() {
       })
     }
 
-    // Add the main write prompt
     writeContent.push({
       type: "text",
-      text: buildWriteUserPrompt(cafeDeHoek, plan.days, analyzedPhotos),
+      text: buildWriteUserPrompt(clientProfile, plan.days, analyzedPhotos),
     })
 
     const writeResponse = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 8000,
-      system: buildWriteSystemPrompt(cafeDeHoek),
+      system: buildWriteSystemPrompt(clientProfile),
       messages: [{ role: "user", content: writeContent }],
     })
 
@@ -142,47 +188,83 @@ export async function POST() {
       )
     }
 
-    // Validate posts against hard constraints
+    // Validate posts
     const validatedPosts = validatePosts(
       rawPosts.posts,
-      cafeDeHoek.bannedPhrases
+      clientProfile.bannedPhrases
     )
 
-    // Attach photo info to each post based on the plan
-    const postsWithPhotos: DayPosts[] = validatedPosts.map((post) => {
+    // Convert Claude output to per-platform DB rows
+    const postRows: Array<{
+      clientId: string
+      platform: Platform
+      scheduledDate: string
+      content: string
+      photoId: string | null
+      reasoning: string
+      rejectionCount: number
+    }> = []
+
+    const openDatesSet = new Set(openDates)
+    let droppedLockedCount = 0
+
+    for (const post of validatedPosts) {
+      const scheduledDate = dayNameToDate(post.day, startDate)
+
+      // Skip posts for locked days — Claude sometimes plans them despite
+      // being told not to. The unique index would reject them anyway.
+      if (!openDatesSet.has(scheduledDate)) {
+        droppedLockedCount++
+        continue
+      }
+
       const dayPlan = plan.days.find((d) => d.day === post.day)
       const photoId = dayPlan?.photoId ?? null
-      const photo = photoId ? photoMap.get(photoId) : null
-      return {
-        ...post,
-        photoId,
-        photoUrl: photo?.blobUrl ?? null,
-      }
-    })
 
-    const result: GenerationResult = {
-      client: {
-        name: cafeDeHoek.name,
-        type: cafeDeHoek.type,
-        location: cafeDeHoek.location,
-      },
-      plan: plan.days,
-      posts: postsWithPhotos,
-      photoAnalyses: Object.fromEntries(
-        analyzedPhotos.map((p) => [p.id, p.analysis])
-      ),
-      metadata: {
-        generatedAt: new Date().toISOString(),
-        model: MODEL,
-        planInputTokens: planResponse.usage.input_tokens,
-        planOutputTokens: planResponse.usage.output_tokens,
-        postsInputTokens: writeResponse.usage.input_tokens,
-        postsOutputTokens: writeResponse.usage.output_tokens,
-        photosUsed: photoDays.length,
-      },
+      // Instagram row
+      postRows.push({
+        clientId,
+        platform: "instagram",
+        scheduledDate,
+        content: post.instagramCaption,
+        photoId,
+        reasoning: post.reasoning,
+        rejectionCount:
+          rejectionCounts.get(`${scheduledDate}:instagram`) ?? 0,
+      })
+
+      // Facebook row
+      postRows.push({
+        clientId,
+        platform: "facebook",
+        scheduledDate,
+        content: post.facebookPost,
+        photoId,
+        reasoning: post.reasoning,
+        rejectionCount:
+          rejectionCounts.get(`${scheduledDate}:facebook`) ?? 0,
+      })
     }
 
-    return NextResponse.json(result)
+    if (droppedLockedCount > 0) {
+      console.warn(
+        `[generate-posts] Claude planned content for ${droppedLockedCount} locked day(s); dropped before insert`
+      )
+    }
+
+    // Atomically delete old posts and insert new ones.
+    // If this fails, old posts are preserved (no partial state).
+    replacePostsForOpenDays(db, clientId, openDates, postRows)
+
+    const response: GeneratePostsResponse = {
+      clientId,
+      startDate,
+      endDate,
+      generatedCount: postRows.length,
+      skippedLockedCount: lockedDays.length,
+    }
+
+    return NextResponse.json(response)
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred"

@@ -25,7 +25,8 @@ Respond with valid JSON only. No markdown, no explanation outside the JSON.`
 
 export function buildPlanUserPrompt(
   client: ClientProfile,
-  photos: AnalyzedPhoto[]
+  photos: AnalyzedPhoto[],
+  lockedDaysContext: string = ""
 ): string {
   const photoSection =
     photos.length > 0
@@ -63,7 +64,7 @@ Respond with this exact JSON structure:
   ]
 }
 
-Include all 7 days: Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, Monday.`
+Include all 7 days: Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, Monday.${lockedDaysContext}`
 }
 
 export function buildWriteSystemPrompt(client: ClientProfile): string {
