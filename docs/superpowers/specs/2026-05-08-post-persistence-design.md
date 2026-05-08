@@ -130,14 +130,16 @@ GET /api/posts?clientId=X&startDate=Y&endDate=Z
 
 The plan prompt receives locked days as already-realized plan output, not as gaps. This is critical for the photo adjacency rule (no back-to-back photo days).
 
+The only information available for locked days is what's stored on the post row: `scheduledDate`, `photoId` (present or null), and `content`. Theme and angle are not stored and must not be fabricated. The adjacency rule only needs to know whether a locked day has a photo or not.
+
 Example prompt context:
 ```
 The following days are already planned and locked. Do not change them.
 Plan new content only for the open days listed after.
 
 LOCKED:
-- Monday 2026-05-11: theme "seasonal menu", photo assigned (photo-uuid-1)
-- Tuesday 2026-05-12: theme "community", text-only
+- Monday 2026-05-11: photo assigned (photo-uuid-1)
+- Tuesday 2026-05-12: text-only
 
 OPEN (plan these):
 - Wednesday 2026-05-13
@@ -147,7 +149,7 @@ OPEN (plan these):
 
 ### Scope constraint
 
-This change adds locked-day context to the plan prompt. Nothing else changes in the prompt. Keep the change minimal — if voice quality shifts after this lands, attribution must be clean. Voice quality investigation is a separate workstream.
+This change adds locked-day context to the plan prompt via string append to the existing user prompt template. No structural rewrite of the prompt. Nothing else changes in the prompt. If voice quality shifts after this lands, attribution must be clean. Voice quality investigation is a separate workstream.
 
 ## Carry-forward notes for review UI
 
