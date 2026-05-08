@@ -11,7 +11,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "seed:admin": "tsx --env-file=.env.local scripts/seed-admin.ts",
-    "seed:cafe": "tsx --env-file=.env.local scripts/seed-cafe-de-hoek.ts"
+    "seed:cafe": "tsx --env-file=.env.local scripts/seed-cafe-de-hoek.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
@@ -36,6 +38,7 @@
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }
