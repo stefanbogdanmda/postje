@@ -16,11 +16,11 @@ export function createTestDb() {
  * Insert a minimal client row for testing. Returns the client ID.
  */
 export function seedTestClient(db: TestDb, clientId: string = "test-client-001") {
-  const userId = "test-user-001"
+  const userId = `user-${clientId}`
 
   db.insert(schema.users).values({
     id: userId,
-    email: "test@example.com",
+    email: `${clientId}@example.com`,
     name: "Test User",
     role: "client",
   }).run()
@@ -32,4 +32,21 @@ export function seedTestClient(db: TestDb, clientId: string = "test-client-001")
   }).run()
 
   return clientId
+}
+
+/**
+ * Insert a minimal photo row for testing foreign key references.
+ * Returns the photo ID.
+ */
+export function seedTestPhoto(db: TestDb, clientId: string, photoId: string) {
+  db.insert(schema.photos).values({
+    id: photoId,
+    clientId,
+    blobUrl: `https://example.com/${photoId}.jpg`,
+    originalFilename: `${photoId}.jpg`,
+    mimeType: "image/jpeg",
+    sizeBytes: 1024,
+  }).run()
+
+  return photoId
 }
