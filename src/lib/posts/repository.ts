@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray } from "drizzle-orm"
+import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
@@ -201,4 +201,147 @@ export function getLockedDays(
     scheduledDate,
     hasPhoto,
   }))
+}
+
+/**
+ * Find a single post by ID, scoped to the given client.
+ * Returns null if no matching post exists.
+ */
+export function getPostById(
+  db: Db,
+  postId: string,
+  clientId: string
+): Post | null {
+  const row = db
+    .select()
+    .from(schema.posts)
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        eq(schema.posts.clientId, clientId)
+      )
+    )
+    .get()
+
+  return (row as Post) ?? null
+}
+
+/**
+ * Approve a draft post. Optionally updates the content (e.g. after
+ * client edits). Throws if the post is not found or not in draft status.
+ */
+export function approvePost(
+  db: Db,
+  postId: string,
+  clientId: string,
+  newContent?: string
+): Post {
+  const post = getPostById(db, postId, clientId)
+
+  if (!post) {
+    throw new Error(`Post not found: ${postId}`)
+  }
+  if (post.status !== "draft") {
+    throw new Error(`Cannot approve post with status "${post.status}"`)
+  }
+
+  const now = new Date()
+  const updates: Record<string, unknown> = {
+    status: "approved",
+    approvedAt: now,
+    updatedAt: now,
+  }
+  if (newContent !== undefined) {
+    updates.content = newContent
+  }
+
+  db.update(schema.posts)
+    .set(updates)
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        eq(schema.posts.clientId, clientId)
+      )
+    )
+    .run()
+
+  return getPostById(db, postId, clientId) as Post
+}
+
+/**
+ * Reject a draft post. Sets status to "rejected", records the
+ * timestamp, and increments the rejection count.
+ * Throws if the post is not found or not in draft status.
+ */
+export function rejectPost(
+  db: Db,
+  postId: string,
+  clientId: string
+): Post {
+  const post = getPostById(db, postId, clientId)
+
+  if (!post) {
+    throw new Error(`Post not found: ${postId}`)
+  }
+  if (post.status !== "draft") {
+    throw new Error(`Cannot reject post with status "${post.status}"`)
+  }
+
+  const now = new Date()
+
+  db.update(schema.posts)
+    .set({
+      status: "rejected",
+      rejectedAt: now,
+      rejectionCount: sql`${schema.posts.rejectionCount} + 1`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        eq(schema.posts.clientId, clientId)
+      )
+    )
+    .run()
+
+  return getPostById(db, postId, clientId) as Post
+}
+
+/**
+ * Replace a post's content and reasoning after regeneration.
+ * Increments rejectionCount, resets status to "draft", and
+ * updates the timestamp. Throws if the post is not found.
+ */
+export function regeneratePost(
+  db: Db,
+  postId: string,
+  clientId: string,
+  newContent: string,
+  newReasoning: string
+): Post {
+  const post = getPostById(db, postId, clientId)
+
+  if (!post) {
+    throw new Error(`Post not found: ${postId}`)
+  }
+
+  const now = new Date()
+
+  db.update(schema.posts)
+    .set({
+      content: newContent,
+      reasoning: newReasoning,
+      status: "draft",
+      rejectionCount: sql`${schema.posts.rejectionCount} + 1`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        eq(schema.posts.clientId, clientId)
+      )
+    )
+    .run()
+
+  return getPostById(db, postId, clientId) as Post
 }

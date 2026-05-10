@@ -6,6 +6,10 @@ import {
   readRejectionCounts,
   replacePostsForOpenDays,
   getLockedDays,
+  getPostById,
+  approvePost,
+  rejectPost,
+  regeneratePost,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -219,5 +223,157 @@ describe("getLockedDays", () => {
 
     const locked = getLockedDays(db, CLIENT_ID, "2026-05-12", "2026-05-18")
     expect(locked).toHaveLength(0)
+  })
+})
+
+describe("getPostById", () => {
+  it("finds a post by id and clientId", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram", scheduledDate: "2026-05-12" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = getPostById(db, postId, CLIENT_ID)
+    expect(result).not.toBeNull()
+    expect(result!.id).toBe(postId)
+    expect(result!.clientId).toBe(CLIENT_ID)
+  })
+
+  it("returns null for wrong clientId", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram", scheduledDate: "2026-05-12" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    seedTestClient(db, "other-client")
+    const result = getPostById(db, postId, "other-client")
+    expect(result).toBeNull()
+  })
+
+  it("returns null for non-existent id", () => {
+    const result = getPostById(db, "non-existent-id", CLIENT_ID)
+    expect(result).toBeNull()
+  })
+})
+
+describe("approvePost", () => {
+  it("sets status to approved and records approvedAt", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram", scheduledDate: "2026-05-12" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = approvePost(db, postId, CLIENT_ID)
+    expect(result.status).toBe("approved")
+    expect(result.approvedAt).toBeInstanceOf(Date)
+  })
+
+  it("updates content when provided", () => {
+    insertPosts(db, [makePostRow({ content: "Original content" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = approvePost(db, postId, CLIENT_ID, "Edited content")
+    expect(result.content).toBe("Edited content")
+    expect(result.status).toBe("approved")
+  })
+
+  it("keeps original content when newContent is not provided", () => {
+    insertPosts(db, [makePostRow({ content: "Original content" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = approvePost(db, postId, CLIENT_ID)
+    expect(result.content).toBe("Original content")
+  })
+
+  it("throws for wrong clientId", () => {
+    insertPosts(db, [makePostRow()])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    seedTestClient(db, "other-client")
+    expect(() => approvePost(db, postId, "other-client")).toThrow("Post not found")
+  })
+
+  it("throws when post is not draft", () => {
+    insertPosts(db, [makePostRow({ status: "rejected" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    expect(() => approvePost(db, postId, CLIENT_ID)).toThrow("Cannot approve post")
+  })
+})
+
+describe("rejectPost", () => {
+  it("sets status to rejected and records rejectedAt", () => {
+    insertPosts(db, [makePostRow()])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = rejectPost(db, postId, CLIENT_ID)
+    expect(result.status).toBe("rejected")
+    expect(result.rejectedAt).toBeInstanceOf(Date)
+  })
+
+  it("increments rejectionCount", () => {
+    insertPosts(db, [makePostRow({ rejectionCount: 0 })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = rejectPost(db, postId, CLIENT_ID)
+    expect(result.rejectionCount).toBe(1)
+  })
+
+  it("throws when post is not draft", () => {
+    insertPosts(db, [makePostRow({ status: "approved" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    expect(() => rejectPost(db, postId, CLIENT_ID)).toThrow("Cannot reject post")
+  })
+
+  it("throws for non-existent post", () => {
+    expect(() => rejectPost(db, "non-existent", CLIENT_ID)).toThrow("Post not found")
+  })
+})
+
+describe("regeneratePost", () => {
+  it("updates content and reasoning in place", () => {
+    insertPosts(db, [makePostRow({ content: "Old content", reasoning: "Old reasoning" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = regeneratePost(db, postId, CLIENT_ID, "New content", "New reasoning")
+    expect(result.content).toBe("New content")
+    expect(result.reasoning).toBe("New reasoning")
+  })
+
+  it("increments rejectionCount", () => {
+    insertPosts(db, [makePostRow({ rejectionCount: 1 })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = regeneratePost(db, postId, CLIENT_ID, "New", "New")
+    expect(result.rejectionCount).toBe(2)
+  })
+
+  it("keeps the same post id", () => {
+    insertPosts(db, [makePostRow()])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = regeneratePost(db, postId, CLIENT_ID, "New", "New")
+    expect(result.id).toBe(postId)
+  })
+
+  it("resets status to draft", () => {
+    insertPosts(db, [makePostRow({ status: "rejected" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    const result = regeneratePost(db, postId, CLIENT_ID, "New", "New")
+    expect(result.status).toBe("draft")
+  })
+
+  it("throws for non-existent post", () => {
+    expect(() => regeneratePost(db, "non-existent", CLIENT_ID, "New", "New")).toThrow("Post not found")
   })
 })
