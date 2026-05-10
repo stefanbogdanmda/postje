@@ -3,6 +3,27 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Dashboard design tokens — warm neutral palette */
+  --surface-bg: #f8f6f3;
+  --surface-card: #ffffff;
+  --surface-muted: #f2efeb;
+  --text-primary: #2c2825;
+  --text-secondary: #6b635b;
+  --text-muted: #a39b91;
+  --accent-approve: #3d6b4f;
+  --accent-pending: #c4593c;
+  --accent-edit: #4a7c91;
+  --border-light: #e8e4df;
+  --border-medium: #d4cfc8;
+  --shadow-card: 0 1px 3px rgba(44, 40, 37, 0.06), 0 4px 12px rgba(44, 40, 37, 0.04);
+  --shadow-elevated: 0 2px 8px rgba(44, 40, 37, 0.08), 0 8px 24px rgba(44, 40, 37, 0.06);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Approved/upcoming tints */
+  --approved-bg: #eef5f0;
+  --approved-border: #c8dece;
+  --approved-text: #3d6b4f;
 }
 
 @theme inline {
@@ -10,6 +31,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-dm-serif);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +45,38 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Dashboard animations */
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fade-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes card-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s var(--ease-out-expo);
+}
+
+.animate-fade-overlay {
+  animation: fade-overlay 0.15s ease-out;
+}
+
+.animate-card-appear {
+  animation: card-appear 0.3s var(--ease-out-expo) both;
 }
