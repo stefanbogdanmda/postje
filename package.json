@@ -14,7 +14,8 @@
     "seed:cafe": "tsx --env-file=.env.local scripts/seed-cafe-de-hoek.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "tsx scripts/e2e-post-pipeline.ts"
+    "test:e2e": "tsx scripts/e2e-post-pipeline.ts",
+    "test:approval": "tsx scripts/e2e-approval-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
