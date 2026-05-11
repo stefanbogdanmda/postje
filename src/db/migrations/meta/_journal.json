@@ -8,6 +8,13 @@
       "when": 1778530823207,
       "tag": "0000_perpetual_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778535246559,
+      "tag": "0001_sharp_wolfpack",
+      "breakpoints": true
     }
   ]
 }
