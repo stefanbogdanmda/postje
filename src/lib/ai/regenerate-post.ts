@@ -1,6 +1,9 @@
 import { getAnthropicClient } from "./client"
 import { extractJSON } from "./extract-json"
-import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
+import { db } from "@/db"
+import { clients } from "@/db/schema"
+import { eq } from "drizzle-orm"
+import { buildClientProfile } from "./client-profile"
 import type { Post } from "@/lib/posts/types"
 
 const MODEL = "claude-sonnet-4-6"
@@ -13,10 +16,25 @@ interface RegeneratedContent {
 export async function regenerateSinglePost(
   existingPost: Post,
   feedback: string,
-  _clientId: string
+  clientId: string
 ): Promise<RegeneratedContent> {
-  // TODO(v2): Load client profile from DB by clientId instead of hardcoded import
-  const client = cafeDeHoek
+  const clientRow = await db
+    .select({
+      businessName: clients.businessName,
+      location: clients.location,
+      industry: clients.industry,
+      businessType: clients.businessType,
+      productsServices: clients.productsServices,
+    })
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .get()
+
+  if (!clientRow) {
+    throw new Error("Client not found")
+  }
+
+  const client = buildClientProfile(clientRow)
 
   const anthropic = getAnthropicClient()
 
