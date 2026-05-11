@@ -42,14 +42,11 @@ const postSelect = {
 }
 
 function assertChanged(
-  result: { rowCount: number | null } | unknown,
+  result: { rowCount: number | null },
   notFoundMessage: string,
   staleMessage: string
 ): void {
-  const rowCount =
-    typeof result === "object" && result !== null && "rowCount" in result
-      ? Number((result as { rowCount: unknown }).rowCount ?? 0)
-      : 0
+  const rowCount = Number(result.rowCount ?? 0)
 
   if (rowCount === 0) {
     throw new Error(`${notFoundMessage}. ${staleMessage}`)
@@ -99,6 +96,8 @@ export async function insertPosts(
     rejectionCount?: number
   }>
 ): Promise<void> {
+  if (rows.length === 0) return
+
   const values = rows.map((row) => ({
     clientId: row.clientId,
     platform: row.platform,
@@ -111,9 +110,7 @@ export async function insertPosts(
   }))
 
   await db.transaction(async (tx) => {
-    for (const value of values) {
-      await tx.insert(schema.posts).values(value)
-    }
+    await tx.insert(schema.posts).values(values)
   })
 }
 
@@ -218,8 +215,8 @@ export async function replacePostsForOpenDays(
     }
 
     // Insert new rows
-    for (const row of newRows) {
-      await tx.insert(schema.posts).values({
+    if (newRows.length > 0) {
+      const values = newRows.map((row) => ({
         clientId: row.clientId,
         platform: row.platform,
         scheduledDate: row.scheduledDate,
@@ -228,7 +225,8 @@ export async function replacePostsForOpenDays(
         photoId: row.photoId ?? null,
         reasoning: row.reasoning,
         rejectionCount: row.rejectionCount ?? 0,
-      })
+      }))
+      await tx.insert(schema.posts).values(values)
     }
   })
 }
@@ -447,7 +445,7 @@ export async function regeneratePost(
  * have a `firstSeenAt` are not overwritten. Posts owned by other clients
  * are silently skipped (tenant isolation).
  *
- * Safe to call on every dashboard load. Single UPDATE statement; SQLite
+ * Safe to call on every dashboard load. Single UPDATE statement; Postgres
  * handles the IN clause natively.
  */
 export async function markPostsAsSeen(
