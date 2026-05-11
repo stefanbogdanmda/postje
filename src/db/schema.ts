@@ -202,6 +202,37 @@ export const authThrottle = pgTable(
 )
 
 // ──────────────────────────────────────────────
+// deletionRequests — scheduled account deletions with a cooling-off window.
+// One active row per user; cron sweeps when scheduledFor <= now and
+// cancelledAt IS NULL. cancelToken is the unguessable id used in the
+// email cancel link.
+// ──────────────────────────────────────────────
+export const deletionRequests = pgTable(
+  "deletion_requests",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cancelToken: text("cancelToken").notNull().unique(),
+    requestedAt: timestamp("requestedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    scheduledFor: timestamp("scheduledFor", { withTimezone: true, mode: "date" })
+      .notNull(),
+    cancelledAt: timestamp("cancelledAt", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completedAt", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    index("deletion_requests_due_idx").on(t.scheduledFor),
+  ]
+)
+
+// ──────────────────────────────────────────────
 // deletionAuditLog — records of deleted accounts
 // ──────────────────────────────────────────────
 export const deletionAuditLog = pgTable("deletion_audit_log", {
