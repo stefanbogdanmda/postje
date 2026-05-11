@@ -29,17 +29,18 @@ export function composeRegenLimitEmail(
 ): ComposedEmail {
   const safeContent = escapeHtml(post.content)
   const safeBusinessName = escapeHtml(post.businessName)
+  const safeScheduledDate = escapeHtml(post.scheduledDate)
   const platform = platformLabel(post.platform)
   const adminUrl = `${appUrl}/admin/clients/${post.clientId}`
 
-  const subject = `Klant heeft een post ${post.rejectionCount}× laten herschrijven — ${post.businessName}`
+  const subject = `Klant heeft een post ${post.rejectionCount}× laten herschrijven — ${safeBusinessName}`
 
   const html = `
     <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
       <h2 style="margin: 0 0 16px;">Post is ${post.rejectionCount}× herschreven</h2>
       <p style="margin: 0 0 8px;"><strong>Klant:</strong> ${safeBusinessName}</p>
       <p style="margin: 0 0 8px;"><strong>Platform:</strong> ${platform}</p>
-      <p style="margin: 0 0 16px;"><strong>Geplande datum:</strong> ${post.scheduledDate}</p>
+      <p style="margin: 0 0 16px;"><strong>Geplande datum:</strong> ${safeScheduledDate}</p>
       <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
         <p style="margin: 0; white-space: pre-wrap;">${safeContent}</p>
       </div>
