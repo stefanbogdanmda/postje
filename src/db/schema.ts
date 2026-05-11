@@ -108,6 +108,8 @@ export const posts = sqliteTable(
     rejectedAt: integer("rejectedAt", { mode: "timestamp_ms" }),
     publishedAt: integer("publishedAt", { mode: "timestamp_ms" }),
     publishError: text("publishError"),
+    firstSeenAt: integer("firstSeenAt", { mode: "timestamp_ms" }),
+    alertedAt: integer("alertedAt", { mode: "timestamp_ms" }),
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -118,6 +120,7 @@ export const posts = sqliteTable(
   (t) => [
     index("posts_client_date_idx").on(t.clientId, t.scheduledDate),
     index("posts_status_publish_idx").on(t.status, t.publishAt),
+    index("posts_stale_alert_idx").on(t.status, t.alertedAt, t.firstSeenAt),
     uniqueIndex("posts_client_date_platform_idx").on(
       t.clientId,
       t.scheduledDate,
