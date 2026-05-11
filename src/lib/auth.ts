@@ -9,7 +9,7 @@ import {
   verificationTokens,
 } from "@/db/schema"
 
-import { isRateLimited } from "./rate-limit"
+import { isMagicLinkRateLimited } from "./auth/throttle"
 import { eq } from "drizzle-orm"
 
 // Resend SDK for sending custom emails
@@ -42,7 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       apiKey: AUTH_RESEND_KEY,
       from: EMAIL_FROM,
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        if (isRateLimited(email)) {
+        if (await isMagicLinkRateLimited(email, { db })) {
           return
         }
 

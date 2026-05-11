@@ -180,6 +180,28 @@ export const verificationTokens = pgTable(
 )
 
 // ──────────────────────────────────────────────
+// authThrottle — persistent rate-limit log for magic-link sends.
+// One row per request attempt. Old rows are cleaned up inline on
+// each call for the same key.
+// ──────────────────────────────────────────────
+export const authThrottle = pgTable(
+  "auth_throttle",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    key: text("key").notNull(),
+    requestedAt: timestamp("requestedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index("auth_throttle_key_requestedAt_idx").on(t.key, t.requestedAt),
+  ]
+)
+
+// ──────────────────────────────────────────────
 // deletionAuditLog — records of deleted accounts
 // ──────────────────────────────────────────────
 export const deletionAuditLog = pgTable("deletion_audit_log", {
