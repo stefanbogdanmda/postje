@@ -12,9 +12,10 @@ if (!adminEmailRaw) {
 }
 
 // Re-assign after the guard so TypeScript narrows to `string`
-const adminEmail: string = adminEmailRaw
+const adminEmail: string = adminEmailRaw.toLowerCase()
 
 const sqlite = new Database("sqlite.db")
+sqlite.pragma("foreign_keys = ON")
 const db = drizzle(sqlite)
 
 async function seed() {

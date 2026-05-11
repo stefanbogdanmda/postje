@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { createTestDb, seedTestClient, seedTestPhoto, type TestDb } from "@/test/db"
+import { users } from "@/db/schema"
+import { eq } from "drizzle-orm"
 import {
   insertPosts,
   getPostsByDateRange,
@@ -263,6 +265,7 @@ describe("approvePost", () => {
     const result = approvePost(db, postId, CLIENT_ID)
     expect(result.status).toBe("approved")
     expect(result.approvedAt).toBeInstanceOf(Date)
+    expect(result.publishAt).toBeInstanceOf(Date)
   })
 
   it("updates content when provided", () => {
@@ -364,8 +367,8 @@ describe("regeneratePost", () => {
     expect(result.id).toBe(postId)
   })
 
-  it("resets status to draft", () => {
-    insertPosts(db, [makePostRow({ status: "rejected" })])
+  it("keeps draft status", () => {
+    insertPosts(db, [makePostRow({ status: "draft" })])
     const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
     const postId = all[0].id
 
@@ -373,7 +376,28 @@ describe("regeneratePost", () => {
     expect(result.status).toBe("draft")
   })
 
+  it("throws when post is not draft", () => {
+    insertPosts(db, [makePostRow({ status: "rejected" })])
+    const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
+    const postId = all[0].id
+
+    expect(() =>
+      regeneratePost(db, postId, CLIENT_ID, "New", "New")
+    ).toThrow("Cannot regenerate post")
+  })
+
   it("throws for non-existent post", () => {
     expect(() => regeneratePost(db, "non-existent", CLIENT_ID, "New", "New")).toThrow("Post not found")
+  })
+})
+
+describe("foreign key enforcement", () => {
+  it("cascades user deletion to client photos and posts", () => {
+    seedTestPhoto(db, CLIENT_ID, "photo-1")
+    insertPosts(db, [makePostRow({ photoId: "photo-1" })])
+
+    db.delete(users).where(eq(users.id, `user-${CLIENT_ID}`)).run()
+
+    expect(getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")).toHaveLength(0)
   })
 })

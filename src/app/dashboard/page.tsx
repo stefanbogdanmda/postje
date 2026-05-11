@@ -4,19 +4,11 @@ import { db } from "@/db"
 import { eq } from "drizzle-orm"
 import { clients } from "@/db/schema"
 import { getPostsByDateRange } from "@/lib/posts/repository"
+import { getGenerationWeekRange } from "@/lib/posts/dates"
 import type { Post } from "@/lib/posts/types"
 import PendingPosts from "@/components/dashboard/pending-posts"
 import UpcomingPosts from "@/components/dashboard/upcoming-posts"
 import PublishedPosts from "@/components/dashboard/published-posts"
-
-function getCurrentWeekStart(): string {
-  const now = new Date()
-  const day = now.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const monday = new Date(now)
-  monday.setDate(now.getDate() + diff)
-  return monday.toISOString().split("T")[0]
-}
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -35,11 +27,8 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  const weekStart = getCurrentWeekStart()
-  const weekStartDate = new Date(weekStart)
-  const weekEndDate = new Date(weekStartDate)
-  weekEndDate.setDate(weekStartDate.getDate() + 6)
-  const weekEndStr = weekEndDate.toISOString().split("T")[0]
+  const { startDate: weekStart, endDate: weekEndStr } =
+    getGenerationWeekRange()
 
   const posts = getPostsByDateRange(db, client.id, weekStart, weekEndStr)
 

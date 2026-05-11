@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
-import { photos } from "@/db/schema"
+import { clients, photos } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { getAnthropicClient } from "@/lib/ai/client"
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
 import { validatePosts } from "@/lib/ai/validate-posts"
-import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
+import { buildClientProfile } from "@/lib/ai/client-profile"
 import {
   readRejectionCounts,
   replacePostsForOpenDays,
@@ -27,23 +27,37 @@ import type {
 } from "@/lib/ai/types"
 import type { GeneratePostsRequest, GeneratePostsResponse } from "@/lib/posts/types"
 import type { Platform } from "@/lib/posts/config"
+import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 const MODEL = "claude-sonnet-4-6"
 
 export const maxDuration = 60
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = rateLimitRequest(
+      request,
+      "generate-posts",
+      5,
+      15 * 60 * 1000
+    )
+    if (rateLimited) return rateLimited
+
     // Parse and validate request
     const body = (await request.json()) as GeneratePostsRequest
-    const { clientId, startDate } = body
+    const { clientId: requestedClientId, startDate } = body
 
-    if (!clientId || !startDate) {
+    if (!startDate || !ISO_DATE_RE.test(startDate)) {
       return NextResponse.json(
-        { error: "clientId and startDate are required" },
+        { error: "startDate must use YYYY-MM-DD format" },
         { status: 400 }
       )
     }
+
+    const { clientId } = await requireClientAccess(requestedClientId)
 
     const dateRange = getDateRange(startDate)
     const endDate = dateRange[dateRange.length - 1]
@@ -67,8 +81,23 @@ export async function POST(request: NextRequest) {
     const rejectionCounts = readRejectionCounts(db, clientId, openDates)
 
     // Load client profile
-    // TODO(v2): Load from DB by clientId instead of hardcoded import
-    const clientProfile = cafeDeHoek
+    const clientRow = await db
+      .select({
+        businessName: clients.businessName,
+        location: clients.location,
+        industry: clients.industry,
+        businessType: clients.businessType,
+        productsServices: clients.productsServices,
+      })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .get()
+
+    if (!clientRow) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 })
+    }
+
+    const clientProfile = buildClientProfile(clientRow)
 
     // Load analyzed photos
     const anthropic = getAnthropicClient()
@@ -127,8 +156,12 @@ export async function POST(request: NextRequest) {
     try {
       plan = extractJSON<WeeklyPlan>(planText.text)
     } catch {
+      console.error("[generate-posts] Failed to parse plan JSON", {
+        clientId,
+        raw: planText.text,
+      })
       return NextResponse.json(
-        { error: "Failed to parse plan JSON", raw: planText.text },
+        { error: "Failed to parse plan JSON" },
         { status: 500 }
       )
     }
@@ -182,8 +215,12 @@ export async function POST(request: NextRequest) {
         writeText.text
       )
     } catch {
+      console.error("[generate-posts] Failed to parse posts JSON", {
+        clientId,
+        raw: writeText.text,
+      })
       return NextResponse.json(
-        { error: "Failed to parse posts JSON", raw: writeText.text },
+        { error: "Failed to parse posts JSON" },
         { status: 500 }
       )
     }
@@ -266,8 +303,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error occurred"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return toErrorResponse(error)
   }
 }
