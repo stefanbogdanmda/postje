@@ -73,6 +73,11 @@ export async function regeneratePostAction(
     }
   const existingPost = getPostById(db, postId, clientId)
   if (!existingPost) return { success: false, error: "Post niet gevonden" }
+  if (existingPost.status !== "draft")
+    return {
+      success: false,
+      error: "Deze post kan niet meer aangepast worden.",
+    }
   if (existingPost.rejectionCount >= MAX_REJECTIONS)
     return {
       success: false,

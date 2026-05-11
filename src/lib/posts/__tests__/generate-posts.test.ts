@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach } from "vitest"
 import { createTestDb, seedTestClient, seedTestPhoto, type TestDb } from "@/test/db"
 import {
   insertPosts,
@@ -61,8 +61,6 @@ describe("generation orchestration", () => {
   it("detects locked days and skips them during generation", () => {
     // Monday approved (locked), rest are open
     const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
-    const wednesdayDate = dayNameToDate("Wednesday", START_DATE)
-
     insertPosts(db, [
       makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved" }),
       makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "approved" }),

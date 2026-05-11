@@ -2,7 +2,12 @@ import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
-import type { Platform, PostStatus } from "./config"
+import {
+  DEFAULT_POST_TIME,
+  INDUSTRY_POST_TIMES,
+  type Platform,
+  type PostStatus,
+} from "./config"
 
 type Db = BetterSQLite3Database<typeof schema>
 
@@ -11,6 +16,67 @@ const LOCKED_STATUSES: PostStatus[] = ["approved", "published", "failed"]
 
 /** Statuses that get deleted during regeneration. */
 const REPLACEABLE_STATUSES: PostStatus[] = ["draft", "rejected"]
+
+const postSelect = {
+  id: schema.posts.id,
+  clientId: schema.posts.clientId,
+  platform: schema.posts.platform,
+  scheduledDate: schema.posts.scheduledDate,
+  status: schema.posts.status,
+  content: schema.posts.content,
+  photoId: schema.posts.photoId,
+  photoUrl: schema.photos.blobUrl,
+  reasoning: schema.posts.reasoning,
+  publishAt: schema.posts.publishAt,
+  rejectionCount: schema.posts.rejectionCount,
+  approvedAt: schema.posts.approvedAt,
+  rejectedAt: schema.posts.rejectedAt,
+  publishedAt: schema.posts.publishedAt,
+  publishError: schema.posts.publishError,
+  createdAt: schema.posts.createdAt,
+  updatedAt: schema.posts.updatedAt,
+}
+
+function assertChanged(
+  result: unknown,
+  notFoundMessage: string,
+  staleMessage: string
+): void {
+  const changes =
+    typeof result === "object" && result !== null && "changes" in result
+      ? Number((result as { changes: unknown }).changes)
+      : 0
+
+  if (changes === 0) {
+    throw new Error(`${notFoundMessage}. ${staleMessage}`)
+  }
+}
+
+function getClientPostTime(db: Db, clientId: string): string {
+  const client = db
+    .select({ industry: schema.clients.industry })
+    .from(schema.clients)
+    .where(eq(schema.clients.id, clientId))
+    .get()
+
+  const industry = client?.industry?.toLowerCase().trim()
+  if (!industry) return DEFAULT_POST_TIME
+
+  const exactMatch = INDUSTRY_POST_TIMES[industry]
+  if (exactMatch) return exactMatch
+
+  const partialMatch = Object.entries(INDUSTRY_POST_TIMES).find(([key]) =>
+    industry.includes(key)
+  )
+
+  return partialMatch?.[1] ?? DEFAULT_POST_TIME
+}
+
+function buildPublishAt(scheduledDate: string, postTime: string): Date {
+  const [year, month, day] = scheduledDate.split("-").map(Number)
+  const [hour, minute] = postTime.split(":").map(Number)
+  return new Date(year, month - 1, day, hour, minute, 0, 0)
+}
 
 /**
  * Insert post rows into the database. All rows are inserted in a
@@ -58,8 +124,9 @@ export function getPostsByDateRange(
   endDate: string
 ): Post[] {
   return db
-    .select()
+    .select(postSelect)
     .from(schema.posts)
+    .leftJoin(schema.photos, eq(schema.posts.photoId, schema.photos.id))
     .where(
       and(
         eq(schema.posts.clientId, clientId),
@@ -213,8 +280,9 @@ export function getPostById(
   clientId: string
 ): Post | null {
   const row = db
-    .select()
+    .select(postSelect)
     .from(schema.posts)
+    .leftJoin(schema.photos, eq(schema.posts.photoId, schema.photos.id))
     .where(
       and(
         eq(schema.posts.id, postId),
@@ -246,24 +314,33 @@ export function approvePost(
   }
 
   const now = new Date()
+  const postTime = getClientPostTime(db, clientId)
   const updates: Record<string, unknown> = {
     status: "approved",
     approvedAt: now,
+    publishAt: buildPublishAt(post.scheduledDate, postTime),
     updatedAt: now,
   }
   if (newContent !== undefined) {
     updates.content = newContent
   }
 
-  db.update(schema.posts)
+  const result = db.update(schema.posts)
     .set(updates)
     .where(
       and(
         eq(schema.posts.id, postId),
-        eq(schema.posts.clientId, clientId)
+        eq(schema.posts.clientId, clientId),
+        eq(schema.posts.status, "draft")
       )
     )
     .run()
+
+  assertChanged(
+    result,
+    `Post not found: ${postId}`,
+    "Cannot approve post because it is no longer a draft"
+  )
 
   return getPostById(db, postId, clientId) as Post
 }
@@ -289,7 +366,7 @@ export function rejectPost(
 
   const now = new Date()
 
-  db.update(schema.posts)
+  const result = db.update(schema.posts)
     .set({
       status: "rejected",
       rejectedAt: now,
@@ -299,10 +376,17 @@ export function rejectPost(
     .where(
       and(
         eq(schema.posts.id, postId),
-        eq(schema.posts.clientId, clientId)
+        eq(schema.posts.clientId, clientId),
+        eq(schema.posts.status, "draft")
       )
     )
     .run()
+
+  assertChanged(
+    result,
+    `Post not found: ${postId}`,
+    "Cannot reject post because it is no longer a draft"
+  )
 
   return getPostById(db, postId, clientId) as Post
 }
@@ -324,10 +408,13 @@ export function regeneratePost(
   if (!post) {
     throw new Error(`Post not found: ${postId}`)
   }
+  if (post.status !== "draft") {
+    throw new Error(`Cannot regenerate post with status "${post.status}"`)
+  }
 
   const now = new Date()
 
-  db.update(schema.posts)
+  const result = db.update(schema.posts)
     .set({
       content: newContent,
       reasoning: newReasoning,
@@ -338,10 +425,17 @@ export function regeneratePost(
     .where(
       and(
         eq(schema.posts.id, postId),
-        eq(schema.posts.clientId, clientId)
+        eq(schema.posts.clientId, clientId),
+        eq(schema.posts.status, "draft")
       )
     )
     .run()
+
+  assertChanged(
+    result,
+    `Post not found: ${postId}`,
+    "Cannot regenerate post because it is no longer a draft"
+  )
 
   return getPostById(db, postId, clientId) as Post
 }
