@@ -1,36 +1,38 @@
-import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
-import { migrate } from "drizzle-orm/better-sqlite3/migrator"
+import { PGlite } from "@electric-sql/pglite"
+import { drizzle } from "drizzle-orm/pglite"
+import { migrate } from "drizzle-orm/pglite/migrator"
 import * as schema from "@/db/schema"
 
-export type TestDb = ReturnType<typeof createTestDb>
+export type TestDb = Awaited<ReturnType<typeof createTestDb>>
 
-export function createTestDb() {
-  const sqlite = new Database(":memory:")
-  sqlite.pragma("foreign_keys = ON")
-  const db = drizzle(sqlite, { schema })
-  migrate(db, { migrationsFolder: "src/db/migrations" })
+export async function createTestDb() {
+  const client = new PGlite()
+  const db = drizzle(client, { schema })
+  await migrate(db, { migrationsFolder: "src/db/migrations" })
   return db
 }
 
 /**
  * Insert a minimal client row for testing. Returns the client ID.
  */
-export function seedTestClient(db: TestDb, clientId: string = "test-client-001") {
+export async function seedTestClient(
+  db: TestDb,
+  clientId: string = "test-client-001"
+) {
   const userId = `user-${clientId}`
 
-  db.insert(schema.users).values({
+  await db.insert(schema.users).values({
     id: userId,
     email: `${clientId}@example.com`,
     name: "Test User",
     role: "client",
-  }).run()
+  })
 
-  db.insert(schema.clients).values({
+  await db.insert(schema.clients).values({
     id: clientId,
     userId,
     businessName: "Test Café",
-  }).run()
+  })
 
   return clientId
 }
@@ -39,15 +41,19 @@ export function seedTestClient(db: TestDb, clientId: string = "test-client-001")
  * Insert a minimal photo row for testing foreign key references.
  * Returns the photo ID.
  */
-export function seedTestPhoto(db: TestDb, clientId: string, photoId: string) {
-  db.insert(schema.photos).values({
+export async function seedTestPhoto(
+  db: TestDb,
+  clientId: string,
+  photoId: string
+) {
+  await db.insert(schema.photos).values({
     id: photoId,
     clientId,
     blobUrl: `https://example.com/${photoId}.jpg`,
     originalFilename: `${photoId}.jpg`,
     mimeType: "image/jpeg",
     sizeBytes: 1024,
-  }).run()
+  })
 
   return photoId
 }

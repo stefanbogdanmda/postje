@@ -44,9 +44,9 @@ function makePostRow(overrides: Partial<{
   }
 }
 
-beforeEach(() => {
-  db = createTestDb()
-  seedTestClient(db, CLIENT_ID)
+beforeEach(async () => {
+  db = await createTestDb()
+  await seedTestClient(db, CLIENT_ID)
 })
 
 describe("insertPosts", () => {
@@ -88,8 +88,8 @@ describe("getPostsByDateRange", () => {
     expect(result).toHaveLength(2)
   })
 
-  it("filters by client ID", () => {
-    seedTestClient(db, "other-client")
+  it("filters by client ID", async () => {
+    await seedTestClient(db, "other-client")
     insertPosts(db, [
       makePostRow({ scheduledDate: "2026-05-12" }),
       { ...makePostRow({ scheduledDate: "2026-05-12" }), clientId: "other-client" },
@@ -206,8 +206,8 @@ describe("getLockedDays", () => {
     expect(locked[0].scheduledDate).toBe("2026-05-12")
   })
 
-  it("reports hasPhoto correctly", () => {
-    seedTestPhoto(db, CLIENT_ID, "photo-1")
+  it("reports hasPhoto correctly", async () => {
+    await seedTestPhoto(db, CLIENT_ID, "photo-1")
     insertPosts(db, [
       makePostRow({ scheduledDate: "2026-05-12", status: "approved", photoId: "photo-1" }),
       makePostRow({ scheduledDate: "2026-05-13", status: "published", photoId: null }),
@@ -245,12 +245,12 @@ describe("getPostById", () => {
     expect(result!.clientId).toBe(CLIENT_ID)
   })
 
-  it("returns null for wrong clientId", () => {
+  it("returns null for wrong clientId", async () => {
     insertPosts(db, [makePostRow({ platform: "instagram", scheduledDate: "2026-05-12" })])
     const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
     const postId = all[0].id
 
-    seedTestClient(db, "other-client")
+    await seedTestClient(db, "other-client")
     const result = getPostById(db, postId, "other-client")
     expect(result).toBeNull()
   })
@@ -292,12 +292,12 @@ describe("approvePost", () => {
     expect(result.content).toBe("Original content")
   })
 
-  it("throws for wrong clientId", () => {
+  it("throws for wrong clientId", async () => {
     insertPosts(db, [makePostRow()])
     const all = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")
     const postId = all[0].id
 
-    seedTestClient(db, "other-client")
+    await seedTestClient(db, "other-client")
     expect(() => approvePost(db, postId, "other-client")).toThrow("Post not found")
   })
 
@@ -397,8 +397,8 @@ describe("regeneratePost", () => {
 })
 
 describe("foreign key enforcement", () => {
-  it("cascades user deletion to client photos and posts", () => {
-    seedTestPhoto(db, CLIENT_ID, "photo-1")
+  it("cascades user deletion to client photos and posts", async () => {
+    await seedTestPhoto(db, CLIENT_ID, "photo-1")
     insertPosts(db, [makePostRow({ photoId: "photo-1" })])
 
     db.delete(users).where(eq(users.id, `user-${CLIENT_ID}`)).run()
@@ -434,9 +434,9 @@ describe("markPostsAsSeen", () => {
     expect(updated.firstSeenAt).toEqual(original)
   })
 
-  it("only affects posts owned by the given client (tenant isolation)", () => {
+  it("only affects posts owned by the given client (tenant isolation)", async () => {
     const OTHER_CLIENT = "other-client-002"
-    seedTestClient(db, OTHER_CLIENT)
+    await seedTestClient(db, OTHER_CLIENT)
 
     insertPosts(db, [makePostRow({ platform: "instagram" })])
     db.insert(posts).values({
