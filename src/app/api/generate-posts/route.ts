@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const endDate = dateRange[dateRange.length - 1]
 
     // Identify locked and open days
-    const lockedDays = getLockedDays(db, clientId, startDate, endDate)
+    const lockedDays = await getLockedDays(db, clientId, startDate, endDate)
     const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
     const openDates = dateRange.filter((d) => !lockedDates.has(d))
 
@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Read rejection counts BEFORE Claude call (read-only, no mutation)
-    const rejectionCounts = readRejectionCounts(db, clientId, openDates)
+    const rejectionCounts = await readRejectionCounts(db, clientId, openDates)
 
     // Load client profile
-    const clientRow = await db
+    const clientRows = await db
       .select({
         businessName: clients.businessName,
         location: clients.location,
@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
       })
       .from(clients)
       .where(eq(clients.id, clientId))
-      .get()
+      .limit(1)
+    const clientRow = clientRows[0]
 
     if (!clientRow) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 })
@@ -291,7 +292,7 @@ export async function POST(request: NextRequest) {
 
     // Atomically delete old posts and insert new ones.
     // If this fails, old posts are preserved (no partial state).
-    replacePostsForOpenDays(db, clientId, openDates, postRows)
+    await replacePostsForOpenDays(db, clientId, openDates, postRows)
 
     const response: GeneratePostsResponse = {
       clientId,

@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const posts = getPostsByDateRange(db, clientId, startDate, endDate)
+    const posts = await getPostsByDateRange(db, clientId, startDate, endDate)
 
     // Group by scheduledDate
     const grouped = new Map<string, typeof posts>()

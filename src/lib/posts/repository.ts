@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, lt, inArray, isNull, sql } from "drizzle-orm"
-import type { NeonDatabase } from "drizzle-orm/neon-serverless"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
 import {
@@ -10,7 +11,15 @@ import {
   type PostStatus,
 } from "./config"
 
-type Db = NeonDatabase<typeof schema>
+/**
+ * Accept any Postgres-dialect Drizzle database. In production this is a
+ * NeonDatabase; in tests it's a PgliteDatabase. Both extend PgDatabase.
+ */
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
 
 /** Statuses that block deletion during regeneration. */
 const LOCKED_STATUSES: PostStatus[] = ["approved", "published", "failed"]
@@ -42,11 +51,19 @@ const postSelect = {
 }
 
 function assertChanged(
-  result: { rowCount: number | null },
+  result: unknown,
   notFoundMessage: string,
   staleMessage: string
 ): void {
-  const rowCount = Number(result.rowCount ?? 0)
+  // Postgres drivers differ on the property name for "rows changed":
+  //   - node-postgres / Neon serverless → `rowCount` (number | null)
+  //   - PGlite (used in tests)           → `affectedRows` (number | undefined)
+  // We probe both defensively so this works across runtimes.
+  if (typeof result !== "object" || result === null) {
+    throw new Error(`${notFoundMessage}. ${staleMessage}`)
+  }
+  const r = result as { rowCount?: number | null; affectedRows?: number | null }
+  const rowCount = Number(r.rowCount ?? r.affectedRows ?? 0)
 
   if (rowCount === 0) {
     throw new Error(`${notFoundMessage}. ${staleMessage}`)

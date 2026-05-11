@@ -20,7 +20,7 @@ export default async function EditClientPage({
 
   const { id } = await params
 
-  const client = await db
+  const clientRows = await db
     .select({
       id: clients.id,
       businessName: clients.businessName,
@@ -35,7 +35,8 @@ export default async function EditClientPage({
     .from(clients)
     .innerJoin(users, eq(clients.userId, users.id))
     .where(eq(clients.id, id))
-    .get()
+    .limit(1)
+  const client = clientRows[0]
 
   if (!client) {
     notFound()

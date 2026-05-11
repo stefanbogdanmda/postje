@@ -16,11 +16,12 @@ export default async function DashboardLayout({
     redirect("/login")
   }
 
-  const client = db
+  const clientRows = await db
     .select({ businessName: clients.businessName })
     .from(clients)
     .where(eq(clients.userId, session.user.id))
-    .get()
+    .limit(1)
+  const client = clientRows[0]
 
   if (!client) {
     redirect("/login")
