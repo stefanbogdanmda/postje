@@ -14,7 +14,7 @@ export default async function AdminPage() {
   }
 
   // Fetch all users from the database
-  const allUsers = await db.select().from(users).all()
+  const allUsers = await db.select().from(users)
 
   return (
     <main style={{ padding: "32px", maxWidth: "800px" }}>

@@ -9,22 +9,26 @@ const CLIENT_ID = "test-client-001"
 const APP_URL = "https://test.example.com"
 let db: TestDb
 
-beforeEach(() => {
-  db = createTestDb()
-  seedTestClient(db, CLIENT_ID)
+beforeEach(async () => {
+  db = await createTestDb()
+  await seedTestClient(db, CLIENT_ID)
 })
 
-function insertDraftWithFirstSeen(seenAt: Date | null, platform: "instagram" | "facebook" = "instagram") {
-  insertPosts(db, [{
+async function insertDraftWithFirstSeen(
+  seenAt: Date | null,
+  platform: "instagram" | "facebook" = "instagram"
+) {
+  await insertPosts(db, [{
     clientId: CLIENT_ID,
     platform,
     scheduledDate: "2026-05-12",
     content: "Test post for alert",
     reasoning: "Test reasoning",
   }])
-  const row = db.select().from(posts).where(eq(posts.platform, platform)).get()
+  const rows = await db.select().from(posts).where(eq(posts.platform, platform)).limit(1)
+  const row = rows[0]
   if (seenAt) {
-    db.update(posts).set({ firstSeenAt: seenAt }).where(eq(posts.id, row!.id)).run()
+    await db.update(posts).set({ firstSeenAt: seenAt }).where(eq(posts.id, row!.id))
   }
   return row!.id
 }
@@ -47,8 +51,8 @@ describe("checkStalePosts", () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
     const seenAt = new Date("2026-01-11T09:00:00Z") // 25h before below "now"
 
-    insertDraftWithFirstSeen(seenAt, "instagram")
-    insertDraftWithFirstSeen(seenAt, "facebook")
+    await insertDraftWithFirstSeen(seenAt, "instagram")
+    await insertDraftWithFirstSeen(seenAt, "facebook")
 
     // Monday 11:00 CET = 10:00 UTC
     const now = new Date("2026-01-12T10:00:00Z")
@@ -64,19 +68,19 @@ describe("checkStalePosts", () => {
   it("marks each post as alerted after successful send", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
     const seenAt = new Date("2026-01-11T09:00:00Z")
-    const postId = insertDraftWithFirstSeen(seenAt)
+    const postId = await insertDraftWithFirstSeen(seenAt)
 
     const now = new Date("2026-01-12T10:00:00Z")
     await checkStalePosts({ db, now, sendEmail, appUrl: APP_URL })
 
-    const after = db.select().from(posts).where(eq(posts.id, postId)).get()
-    expect(after?.alertedAt).toEqual(now)
+    const afterRows = await db.select().from(posts).where(eq(posts.id, postId)).limit(1)
+    expect(afterRows[0]?.alertedAt).toEqual(now)
   })
 
   it("does NOT mark post as alerted if the email send fails", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: false, error: "boom" })
     const seenAt = new Date("2026-01-11T09:00:00Z")
-    const postId = insertDraftWithFirstSeen(seenAt)
+    const postId = await insertDraftWithFirstSeen(seenAt)
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkStalePosts({ db, now, sendEmail, appUrl: APP_URL })
@@ -84,16 +88,16 @@ describe("checkStalePosts", () => {
     expect(result.alertsSent).toBe(0)
     expect(result.alertsFailed).toBe(1)
 
-    const after = db.select().from(posts).where(eq(posts.id, postId)).get()
-    expect(after?.alertedAt).toBeNull()
+    const afterRows = await db.select().from(posts).where(eq(posts.id, postId)).limit(1)
+    expect(afterRows[0]?.alertedAt).toBeNull()
   })
 
   it("does not alert posts already alerted (idempotent)", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
     const seenAt = new Date("2026-01-11T09:00:00Z")
-    const postId = insertDraftWithFirstSeen(seenAt)
-    db.update(posts).set({ alertedAt: new Date("2026-01-11T20:00:00Z") })
-      .where(eq(posts.id, postId)).run()
+    const postId = await insertDraftWithFirstSeen(seenAt)
+    await db.update(posts).set({ alertedAt: new Date("2026-01-11T20:00:00Z") })
+      .where(eq(posts.id, postId))
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkStalePosts({ db, now, sendEmail, appUrl: APP_URL })
@@ -112,8 +116,8 @@ describe("checkStalePosts", () => {
     })
 
     const seenAt = new Date("2026-01-11T09:00:00Z")
-    insertDraftWithFirstSeen(seenAt, "instagram")
-    insertDraftWithFirstSeen(seenAt, "facebook")
+    await insertDraftWithFirstSeen(seenAt, "instagram")
+    await insertDraftWithFirstSeen(seenAt, "facebook")
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkStalePosts({ db, now, sendEmail, appUrl: APP_URL })

@@ -51,24 +51,26 @@ export async function requireClientAccess(
       throw new HttpError(400, "clientId is required")
     }
 
-    const client = db
+    const adminClientRows = await db
       .select({ id: clients.id })
       .from(clients)
       .where(eq(clients.id, requestedClientId))
-      .get()
+      .limit(1)
+    const adminClient = adminClientRows[0]
 
-    if (!client) {
+    if (!adminClient) {
       throw new HttpError(404, "Client not found")
     }
 
-    return { user, clientId: client.id }
+    return { user, clientId: adminClient.id }
   }
 
-  const client = db
+  const clientRows = await db
     .select({ id: clients.id })
     .from(clients)
     .where(eq(clients.userId, user.id))
-    .get()
+    .limit(1)
+  const client = clientRows[0]
 
   if (!client) {
     throw new HttpError(403, "Forbidden")

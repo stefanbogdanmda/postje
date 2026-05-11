@@ -19,11 +19,12 @@ export default async function Home() {
   // First-login detection: query the database for the freshest value.
   // We can't rely on session.user.hasLoggedIn because Auth.js may have
   // cached the session before we can update it. The DB is the source of truth.
-  const user = await db
+  const userRows = await db
     .select({ hasLoggedIn: users.hasLoggedIn })
     .from(users)
     .where(eq(users.id, session.user.id))
-    .get()
+    .limit(1)
+  const user = userRows[0]
 
   if (user && !user.hasLoggedIn) {
     // Flip the flag BEFORE redirecting — the welcome page is a greeting,

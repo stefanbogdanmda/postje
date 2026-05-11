@@ -1,5 +1,4 @@
-import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
+import { db } from "../src/db"
 import { users } from "../src/db/schema"
 import { eq } from "drizzle-orm"
 
@@ -14,21 +13,16 @@ if (!adminEmailRaw) {
 // Re-assign after the guard so TypeScript narrows to `string`
 const adminEmail: string = adminEmailRaw.toLowerCase()
 
-const sqlite = new Database("sqlite.db")
-sqlite.pragma("foreign_keys = ON")
-const db = drizzle(sqlite)
-
 async function seed() {
   // Check if the admin already exists
-  const existing = await db
+  const existingRows = await db
     .select()
     .from(users)
     .where(eq(users.email, adminEmail))
-    .get()
+    .limit(1)
 
-  if (existing) {
+  if (existingRows.length > 0) {
     console.log(`Admin account already exists for ${adminEmail}. Skipping.`)
-    sqlite.close()
     return
   }
 
@@ -40,11 +34,9 @@ async function seed() {
   })
 
   console.log(`Admin account created for ${adminEmail}.`)
-  sqlite.close()
 }
 
 seed().catch((err) => {
   console.error("Seed script failed:", err)
-  sqlite.close()
   process.exit(1)
 })

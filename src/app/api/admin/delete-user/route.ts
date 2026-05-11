@@ -28,11 +28,12 @@ export async function POST(request: Request) {
   }
 
   // Look up the user to get their email for the audit log
-  const userToDelete = await db
+  const userRows = await db
     .select()
     .from(users)
     .where(eq(users.id, userId))
-    .get()
+    .limit(1)
+  const userToDelete = userRows[0]
 
   if (!userToDelete) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })

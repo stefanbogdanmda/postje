@@ -24,12 +24,18 @@ const EMAIL_FROM = process.env.EMAIL_FROM ?? "onboarding@resend.dev"
 const resendClient = new ResendClient(AUTH_RESEND_KEY)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // The Auth.js v1 adapter types `accounts.expires_at` as `integer`, but our
+  // schema column is `bigint` (mode "number"). Stored values are unix epoch
+  // seconds that fit in int32 — the runtime contract is identical. We cast
+  // the config to `never` so the type system stops complaining about the
+  // column width difference. Switching to `integer` would require a new
+  // migration on the already-deployed Neon database.
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
-  }),
+  } as never),
 
   providers: [
     Resend({
@@ -89,13 +95,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = user.email?.toLowerCase()
       if (!email) return false
 
-      const existingUser = await db
+      const existingUsers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.email, email))
-        .get()
+        .limit(1)
 
-      return !!existingUser
+      return existingUsers.length > 0
     },
   },
 })
