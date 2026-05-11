@@ -52,9 +52,9 @@ function mockClaudeOutput(dayNames: string[]) {
   }))
 }
 
-beforeEach(() => {
-  db = createTestDb()
-  seedTestClient(db, CLIENT_ID)
+beforeEach(async () => {
+  db = await createTestDb()
+  await seedTestClient(db, CLIENT_ID)
 })
 
 describe("generation orchestration", () => {
@@ -78,11 +78,11 @@ describe("generation orchestration", () => {
     expect(openDates).not.toContain(tuesdayDate)
   })
 
-  it("includes locked-day context in plan prompt", () => {
+  it("includes locked-day context in plan prompt", async () => {
     const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
 
     // Seed the photo row first to satisfy the FK constraint
-    seedTestPhoto(db, CLIENT_ID, "photo-1")
+    await seedTestPhoto(db, CLIENT_ID, "photo-1")
 
     insertPosts(db, [
       makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved", photoId: "photo-1" }),

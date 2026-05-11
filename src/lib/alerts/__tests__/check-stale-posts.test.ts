@@ -9,9 +9,9 @@ const CLIENT_ID = "test-client-001"
 const APP_URL = "https://test.example.com"
 let db: TestDb
 
-beforeEach(() => {
-  db = createTestDb()
-  seedTestClient(db, CLIENT_ID)
+beforeEach(async () => {
+  db = await createTestDb()
+  await seedTestClient(db, CLIENT_ID)
 })
 
 function insertDraftWithFirstSeen(seenAt: Date | null, platform: "instagram" | "facebook" = "instagram") {
