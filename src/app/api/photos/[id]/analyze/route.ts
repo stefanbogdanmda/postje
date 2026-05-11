@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const rateLimited = rateLimitRequest(request, "photo-analyze", 20, 15 * 60 * 1000)
+    const rateLimited = await rateLimitRequest(request, "photo-analyze", 20, 15 * 60 * 1000)
     if (rateLimited) return rateLimited
 
     const { id } = await params
