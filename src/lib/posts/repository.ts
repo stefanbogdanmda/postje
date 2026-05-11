@@ -5,6 +5,7 @@ import type { Post, LockedDay } from "./types"
 import {
   DEFAULT_POST_TIME,
   INDUSTRY_POST_TIMES,
+  MAX_REJECTIONS,
   type Platform,
   type PostStatus,
 } from "./config"
@@ -544,17 +545,15 @@ export interface RegenLimitPost {
   rejectionCount: number
 }
 
-const MAX_REJECTIONS_THRESHOLD = 3
-
 /**
  * Find every draft post that:
- *   - has rejectionCount >= MAX_REJECTIONS_THRESHOLD (3)
+ *   - has rejectionCount >= MAX_REJECTIONS (3)
  *   - has NOT yet been alerted (regenLimitAlertedAt IS NULL)
  *
  * Joins clients to include businessName for the email subject.
  *
- * The threshold matches `MAX_REJECTIONS` in src/lib/posts/config.ts.
- * Kept as a local constant here to avoid a circular config import.
+ * The threshold is `MAX_REJECTIONS` from src/lib/posts/config.ts,
+ * which is also enforced in regeneratePostAction.
  */
 export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
   const rows = db
@@ -572,7 +571,7 @@ export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
     .where(
       and(
         eq(schema.posts.status, "draft"),
-        gte(schema.posts.rejectionCount, MAX_REJECTIONS_THRESHOLD),
+        gte(schema.posts.rejectionCount, MAX_REJECTIONS),
         isNull(schema.posts.regenLimitAlertedAt)
       )
     )
