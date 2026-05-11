@@ -20,9 +20,9 @@ describe("composeRegenLimitEmail", () => {
     expect(subject).toContain("Café De Hoek")
   })
 
-  it("mentions the regeneration count in the subject or body", () => {
-    const { subject, html } = composeRegenLimitEmail(SAMPLE_POST, APP_URL)
-    expect(subject + html).toMatch(/3/)
+  it("mentions the regeneration count in the subject", () => {
+    const { subject } = composeRegenLimitEmail(SAMPLE_POST, APP_URL)
+    expect(subject).toContain("3×")
   })
 
   it("includes the platform name in the body", () => {
@@ -63,5 +63,12 @@ describe("composeRegenLimitEmail", () => {
     const { html } = composeRegenLimitEmail(evilPost, APP_URL)
     expect(html).not.toContain("<img src=x>")
     expect(html).toContain("&lt;img src=x&gt;")
+  })
+
+  it("escapes HTML in scheduledDate to prevent injection", () => {
+    const evilPost = { ...SAMPLE_POST, scheduledDate: '<img src=x onerror=alert(1)>' }
+    const { html } = composeRegenLimitEmail(evilPost, APP_URL)
+    expect(html).not.toContain("<img src=x")
+    expect(html).toContain("&lt;img src=x")
   })
 })
