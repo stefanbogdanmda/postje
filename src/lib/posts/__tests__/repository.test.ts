@@ -13,6 +13,8 @@ import {
   rejectPost,
   regeneratePost,
   markPostsAsSeen,
+  findStalePosts,
+  markPostAlerted,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -464,5 +466,141 @@ describe("markPostsAsSeen", () => {
 
     const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
     expect(post.firstSeenAt).toBeNull()
+  })
+})
+
+describe("findStalePosts", () => {
+  // Helper to insert a post and immediately patch firstSeenAt/alertedAt/status
+  // via direct UPDATE, since insertPosts doesn't expose those columns.
+  function insertWithState(opts: {
+    scheduledDate?: string
+    platform?: Platform
+    status: PostStatus
+    firstSeenAt: Date | null
+    alertedAt: Date | null
+  }) {
+    insertPosts(db, [
+      makePostRow({
+        scheduledDate: opts.scheduledDate ?? "2026-05-12",
+        platform: opts.platform ?? "instagram",
+      }),
+    ])
+    const post = getPostsByDateRange(
+      db,
+      CLIENT_ID,
+      opts.scheduledDate ?? "2026-05-12",
+      opts.scheduledDate ?? "2026-05-12"
+    ).find((p) => p.platform === (opts.platform ?? "instagram"))!
+
+    db.update(posts)
+      .set({
+        status: opts.status,
+        firstSeenAt: opts.firstSeenAt,
+        alertedAt: opts.alertedAt,
+      })
+      .where(eq(posts.id, post.id))
+      .run()
+
+    return post.id
+  }
+
+  it("returns a draft post seen >24h ago with no alert", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T09:00:00Z") // 25 hours earlier
+
+    insertWithState({
+      status: "draft",
+      firstSeenAt: seenAt,
+      alertedAt: null,
+    })
+
+    const stale = findStalePosts(db, cutoff)
+    expect(stale).toHaveLength(1)
+  })
+
+  it("excludes posts that are NOT draft", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T09:00:00Z")
+
+    insertWithState({ status: "approved", firstSeenAt: seenAt, alertedAt: null, platform: "instagram" })
+    insertWithState({ status: "rejected", firstSeenAt: seenAt, alertedAt: null, platform: "facebook" })
+    insertWithState({ status: "published", firstSeenAt: seenAt, alertedAt: null, scheduledDate: "2026-05-13" })
+
+    expect(findStalePosts(db, cutoff)).toHaveLength(0)
+  })
+
+  it("excludes posts where firstSeenAt is NULL", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+
+    insertWithState({ status: "draft", firstSeenAt: null, alertedAt: null })
+
+    expect(findStalePosts(db, cutoff)).toHaveLength(0)
+  })
+
+  it("excludes posts seen less than 24h ago", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T15:00:00Z") // 19 hours earlier
+
+    insertWithState({ status: "draft", firstSeenAt: seenAt, alertedAt: null })
+
+    expect(findStalePosts(db, cutoff)).toHaveLength(0)
+  })
+
+  it("excludes posts that have already been alerted", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T09:00:00Z")
+    const alertedAt = new Date("2026-05-12T20:00:00Z")
+
+    insertWithState({ status: "draft", firstSeenAt: seenAt, alertedAt })
+
+    expect(findStalePosts(db, cutoff)).toHaveLength(0)
+  })
+
+  it("returns multiple matching posts", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T09:00:00Z")
+
+    insertWithState({ status: "draft", firstSeenAt: seenAt, alertedAt: null, platform: "instagram" })
+    insertWithState({ status: "draft", firstSeenAt: seenAt, alertedAt: null, platform: "facebook" })
+
+    expect(findStalePosts(db, cutoff)).toHaveLength(2)
+  })
+
+  it("includes client businessName in each result row", () => {
+    const cutoff = new Date("2026-05-13T10:00:00Z")
+    const seenAt = new Date("2026-05-12T09:00:00Z")
+
+    insertWithState({ status: "draft", firstSeenAt: seenAt, alertedAt: null })
+
+    const stale = findStalePosts(db, cutoff)
+    expect(stale[0].businessName).toBe("Test Café")
+    expect(stale[0].clientId).toBe(CLIENT_ID)
+  })
+})
+
+describe("markPostAlerted", () => {
+  it("sets alertedAt on the matching post", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const now = new Date("2026-05-13T10:00:00Z")
+    markPostAlerted(db, post.id, now)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.alertedAt).toEqual(now)
+  })
+
+  it("does NOT overwrite an existing alertedAt", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const first = new Date("2026-05-13T10:00:00Z")
+    markPostAlerted(db, post.id, first)
+
+    const second = new Date("2026-05-14T10:00:00Z")
+    markPostAlerted(db, post.id, second)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.alertedAt).toEqual(first)
   })
 })
