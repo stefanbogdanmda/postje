@@ -3,14 +3,19 @@ import { db } from "@/db"
 import { photos } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { analyzePhoto } from "@/lib/photos/analyze"
+import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 export const maxDuration = 60
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimited = rateLimitRequest(request, "photo-analyze", 20, 15 * 60 * 1000)
+    if (rateLimited) return rateLimited
+
     const { id } = await params
 
     const photo = await db
@@ -26,6 +31,8 @@ export async function POST(
       )
     }
 
+    await requireClientAccess(photo.clientId)
+
     const analysis = await analyzePhoto(photo.blobUrl)
     const now = new Date()
 
@@ -40,11 +47,6 @@ export async function POST(
       analyzedAt: now.toISOString(),
     })
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Analysis failed"
-    return NextResponse.json(
-      { analysisStatus: "failed" as const, error: message },
-      { status: 500 }
-    )
+    return toErrorResponse(error)
   }
 }

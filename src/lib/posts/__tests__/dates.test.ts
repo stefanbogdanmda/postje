@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { dayNameToDate, getDateRange } from "../dates"
+import {
+  dayNameToDate,
+  getDateRange,
+  getGenerationWeekRange,
+  getGenerationWeekStart,
+} from "../dates"
 
 describe("dayNameToDate", () => {
   it("maps Tuesday to the start date", () => {
@@ -38,5 +43,22 @@ describe("getDateRange", () => {
   it("handles year boundary", () => {
     const dates = getDateRange("2026-12-29")
     expect(dates[3]).toBe("2027-01-01")
+  })
+})
+
+describe("getGenerationWeekStart", () => {
+  it("uses Tuesday as the first day of the generation week", () => {
+    expect(getGenerationWeekStart(new Date(2026, 4, 12))).toBe("2026-05-12")
+  })
+
+  it("maps Monday to the previous Tuesday", () => {
+    expect(getGenerationWeekStart(new Date(2026, 4, 18))).toBe("2026-05-12")
+  })
+
+  it("returns Tuesday-through-Monday range", () => {
+    expect(getGenerationWeekRange(new Date(2026, 4, 18))).toEqual({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+    })
   })
 })

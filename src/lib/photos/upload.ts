@@ -34,8 +34,12 @@ export async function uploadPhotoToBlob(
   file: File,
   clientId: string
 ): Promise<{ url: string }> {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
+  const safeExtension = /^[a-z0-9]+$/.test(extension) ? extension : "jpg"
+  const key = `photos/${clientId}/${Date.now()}-${crypto.randomUUID()}.${safeExtension}`
+
   const blob = await put(
-    `photos/${clientId}/${Date.now()}-${file.name}`,
+    key,
     file,
     { access: "public" }
   )

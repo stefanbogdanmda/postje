@@ -29,3 +29,22 @@ export function isRateLimited(email: string): boolean {
   requestLog.set(normalizedEmail, recentTimestamps)
   return false
 }
+
+export function isKeyRateLimited(
+  key: string,
+  maxRequests: number,
+  windowMs: number
+): boolean {
+  const now = Date.now()
+  const timestamps = requestLog.get(key) ?? []
+  const recentTimestamps = timestamps.filter((t) => now - t < windowMs)
+
+  if (recentTimestamps.length >= maxRequests) {
+    requestLog.set(key, recentTimestamps)
+    return true
+  }
+
+  recentTimestamps.push(now)
+  requestLog.set(key, recentTimestamps)
+  return false
+}

@@ -10,6 +10,7 @@ import {
 } from "@/db/schema"
 
 import { isRateLimited } from "./rate-limit"
+import { eq } from "drizzle-orm"
 
 // Resend SDK for sending custom emails
 import { Resend as ResendClient } from "resend"
@@ -84,8 +85,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session
     },
 
-    async signIn() {
-      return true
+    async signIn({ user }) {
+      const email = user.email?.toLowerCase()
+      if (!email) return false
+
+      const existingUser = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .get()
+
+      return !!existingUser
     },
   },
 })

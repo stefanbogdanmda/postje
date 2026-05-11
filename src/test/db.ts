@@ -7,6 +7,7 @@ export type TestDb = ReturnType<typeof createTestDb>
 
 export function createTestDb() {
   const sqlite = new Database(":memory:")
+  sqlite.pragma("foreign_keys = ON")
   const db = drizzle(sqlite, { schema })
   migrate(db, { migrationsFolder: "src/db/migrations" })
   return db
