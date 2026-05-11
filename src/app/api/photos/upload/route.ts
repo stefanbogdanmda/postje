@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
 import { photos } from "@/db/schema"
 import { eq } from "drizzle-orm"
-import { clients } from "@/db/schema"
 import { validatePhotoFile, uploadPhotoToBlob } from "@/lib/photos/upload"
 import { analyzePhoto } from "@/lib/photos/analyze"
 import type { PhotoRow, UploadResult } from "@/lib/ai/types"
+import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = rateLimitRequest(request, "photo-upload", 20, 15 * 60 * 1000)
+    if (rateLimited) return rateLimited
+
     const formData = await request.formData()
     const file = formData.get("file")
-    const clientId = formData.get("clientId")
+    const requestedClientId = formData.get("clientId")
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -22,26 +26,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!clientId || typeof clientId !== "string") {
+    if (requestedClientId !== null && typeof requestedClientId !== "string") {
       return NextResponse.json(
-        { error: "Missing clientId in form data" },
+        { error: "Invalid clientId in form data" },
         { status: 400 }
       )
     }
 
-    // Verify client exists
-    const client = await db
-      .select()
-      .from(clients)
-      .where(eq(clients.id, clientId))
-      .get()
-
-    if (!client) {
-      return NextResponse.json(
-        { error: "Client not found" },
-        { status: 404 }
-      )
-    }
+    const { clientId } = await requireClientAccess(requestedClientId)
 
     // Validate file
     const validationError = validatePhotoFile(file)
@@ -96,8 +88,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Upload failed"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return toErrorResponse(error)
   }
 }
