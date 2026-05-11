@@ -19,6 +19,7 @@ export interface Post {
   publishError: string | null
   firstSeenAt: Date | null
   alertedAt: Date | null
+  regenLimitAlertedAt: Date | null
   createdAt: Date
   updatedAt: Date
 }

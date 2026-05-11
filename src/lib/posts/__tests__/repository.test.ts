@@ -16,6 +16,7 @@ import {
   findStalePosts,
   markPostAlerted,
   findPostsAtRegenLimit,
+  markPostRegenLimitAlerted,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -707,5 +708,38 @@ describe("findPostsAtRegenLimit", () => {
     expect(matches[0].businessName).toBe("Test Café")
     expect(matches[0].clientId).toBe(CLIENT_ID)
     expect(matches[0].rejectionCount).toBe(4)
+  })
+})
+
+describe("markPostRegenLimitAlerted", () => {
+  it("sets regenLimitAlertedAt on the matching post", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const now = new Date("2026-05-13T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, now)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.regenLimitAlertedAt).toEqual(now)
+  })
+
+  it("does NOT overwrite an existing regenLimitAlertedAt", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const first = new Date("2026-05-13T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, first)
+
+    const second = new Date("2026-05-14T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, second)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.regenLimitAlertedAt).toEqual(first)
+  })
+
+  it("is a no-op when the post ID does not exist", () => {
+    const now = new Date("2026-05-13T10:00:00Z")
+    // Should not throw
+    expect(() => markPostRegenLimitAlerted(db, "nonexistent-id", now)).not.toThrow()
   })
 })
