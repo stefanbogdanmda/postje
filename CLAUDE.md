@@ -30,8 +30,15 @@ JavaScript with type checking. The computer catches mistakes before the code run
 ### Framework: Next.js
 Handles both the website and the server logic in one project. Built on React.
 
-### Database: SQLite with Drizzle
-SQLite stores all data in a single file. Drizzle lets us read and write to it using TypeScript instead of raw database queries.
+### Database: Neon Postgres with Drizzle
+Neon is a serverless Postgres provider integrated with Vercel via the Marketplace. The free tier covers early use. Drizzle is the TypeScript library we use to read and write to it without writing raw SQL — Drizzle is the "forklift driver" that knows how to navigate the Postgres warehouse.
+
+In local development, the dev server connects to the same Neon instance as production — there is no separate local file. A different `DATABASE_URL` should be configured for staging/preview when those environments exist.
+
+Free tiers used:
+- Vercel Hobby — runs the app
+- Neon free tier — stores data
+- Resend free — sends magic-link emails (3,000/month)
 
 ### AI: Claude API
 Generates the actual social media posts.
