@@ -110,6 +110,7 @@ export const posts = sqliteTable(
     publishError: text("publishError"),
     firstSeenAt: integer("firstSeenAt", { mode: "timestamp_ms" }),
     alertedAt: integer("alertedAt", { mode: "timestamp_ms" }),
+    regenLimitAlertedAt: integer("regenLimitAlertedAt", { mode: "timestamp_ms" }),
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),
