@@ -44,6 +44,15 @@ sqlite.db-journal
 # superpowers brainstorming sessions
 .superpowers/
 
+# Claude Code local settings and MCP config
+.claude/settings.local.json
+.mcp.json
+
+# dev server logs and generated assets
+.next-dev.log
+.next-dev.err.log
+/public/generated/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
