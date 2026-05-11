@@ -9,6 +9,7 @@ export interface Post {
   status: PostStatus
   content: string
   photoId: string | null
+  photoUrl: string | null
   reasoning: string
   publishAt: Date | null
   rejectionCount: number

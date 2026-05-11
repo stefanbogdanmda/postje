@@ -18,10 +18,19 @@ function InstagramPreview({ post }: PostPreviewProps) {
       </div>
 
       {/* Photo area */}
-      <div className="bg-gradient-to-br from-[#f5f0e8] to-[#e8dcc8] h-48 flex items-center justify-center">
-        <span className="text-5xl" aria-hidden="true">
-          {post.photoId ? "\u{1F4F7}" : "\u{1F4DD}"}
-        </span>
+      <div className="bg-gradient-to-br from-[#f5f0e8] to-[#e8dcc8] h-48 flex items-center justify-center overflow-hidden">
+        {post.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.photoUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-5xl" aria-hidden="true">
+            {post.photoId ? "\u{1F4F7}" : "\u{1F4DD}"}
+          </span>
+        )}
       </div>
 
       {/* Caption */}
@@ -59,10 +68,19 @@ function FacebookPreview({ post }: PostPreviewProps) {
 
       {/* Photo area (only if post has a photo) */}
       {post.photoId && (
-        <div className="bg-gradient-to-br from-[#f5f0e8] to-[#e8dcc8] h-40 flex items-center justify-center">
-          <span className="text-5xl" aria-hidden="true">
-            {"\u{1F4F7}"}
-          </span>
+        <div className="bg-gradient-to-br from-[#f5f0e8] to-[#e8dcc8] h-40 flex items-center justify-center overflow-hidden">
+          {post.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.photoUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="text-5xl" aria-hidden="true">
+              {"\u{1F4F7}"}
+            </span>
+          )}
         </div>
       )}
     </div>

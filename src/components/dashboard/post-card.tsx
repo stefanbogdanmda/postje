@@ -27,10 +27,19 @@ export function PostCard({ post, onClick, index }: PostCardProps) {
       style={{ animationDelay: `${index * 50}ms` }}
     >
       {/* Image placeholder with platform badge */}
-      <div className="relative h-32 bg-gradient-to-br from-[var(--surface-muted)] to-[var(--border-light)] flex items-center justify-center">
-        <span className="text-2xl" aria-hidden="true">
-          {post.photoId ? "\u{1F4F7}" : "\u{1F4DD}"}
-        </span>
+      <div className="relative h-32 bg-gradient-to-br from-[var(--surface-muted)] to-[var(--border-light)] flex items-center justify-center overflow-hidden">
+        {post.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.photoUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-2xl" aria-hidden="true">
+            {post.photoId ? "\u{1F4F7}" : "\u{1F4DD}"}
+          </span>
+        )}
 
         <span className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-xs font-medium px-2 py-1 rounded-full">
           <span
