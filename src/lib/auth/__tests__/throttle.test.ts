@@ -113,16 +113,18 @@ describe("isMagicLinkRateLimited — window semantics", () => {
       MAGIC_LINK_MAX_REQUESTS
     )
 
-    const afterWindow = new Date(
-      start.getTime() + MAGIC_LINK_WINDOW_MS + 1000
+    // Far enough past the last inserted row (start + 4s) that every prior
+    // row is strictly outside the sliding window.
+    const wellAfterWindow = new Date(
+      start.getTime() + MAGIC_LINK_WINDOW_MS + 10_000
     )
 
     await isMagicLinkRateLimited("user@example.com", {
       db,
-      now: afterWindow,
+      now: wellAfterWindow,
     })
 
-    // The 5 expired rows are gone, 1 fresh row remains.
+    // All 5 expired rows are gone, 1 fresh row remains.
     expect(await countRowsForKey("user@example.com")).toBe(1)
   })
 
