@@ -12,7 +12,7 @@ export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
-    const rateLimited = rateLimitRequest(request, "photo-upload", 20, 15 * 60 * 1000)
+    const rateLimited = await rateLimitRequest(request, "photo-upload", 20, 15 * 60 * 1000)
     if (rateLimited) return rateLimited
 
     const formData = await request.formData()

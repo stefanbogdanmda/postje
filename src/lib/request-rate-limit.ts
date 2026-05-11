@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { isKeyRateLimited } from "./rate-limit"
+import { db } from "@/db"
+import { isKeyRateLimited } from "./auth/throttle"
 
 function getIp(request: NextRequest): string {
   return (
@@ -9,14 +10,20 @@ function getIp(request: NextRequest): string {
   )
 }
 
-export function rateLimitRequest(
+export async function rateLimitRequest(
   request: NextRequest,
   scope: string,
   maxRequests: number,
   windowMs: number
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const key = `${scope}:${getIp(request)}`
-  if (!isKeyRateLimited(key, maxRequests, windowMs)) {
+  const limited = await isKeyRateLimited(
+    key,
+    { maxRequests, windowMs },
+    { db }
+  )
+
+  if (!limited) {
     return null
   }
 
