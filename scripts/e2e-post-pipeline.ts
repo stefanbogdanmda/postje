@@ -18,6 +18,7 @@
  */
 
 import Database from "better-sqlite3"
+import crypto from "node:crypto"
 
 const BASE_URL = "http://localhost:3000"
 const CLIENT_ID = "cafe-de-hoek-00000000"
@@ -25,11 +26,34 @@ const START_DATE = "2026-05-12" // a Tuesday
 const END_DATE = "2026-05-18" // the following Monday
 
 const db = new Database("sqlite.db")
+db.pragma("foreign_keys = ON")
+const SESSION_TOKEN = `e2e-${crypto.randomUUID()}`
+const COOKIE_HEADER = `authjs.session-token=${SESSION_TOKEN}`
 
 // ── Helpers ──────────────────────────────────────────────
 
 function resetPosts() {
   db.prepare("DELETE FROM posts WHERE clientId = ?").run(CLIENT_ID)
+}
+
+function createAdminSession() {
+  const admin = db
+    .prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
+    .get() as { id: string } | undefined
+
+  if (!admin) {
+    console.error("\nERROR: No admin user found. Run `npm run seed:admin` first.")
+    process.exit(1)
+  }
+
+  const expires = new Date(Date.now() + 60 * 60 * 1000).getTime()
+  db.prepare(
+    "INSERT INTO sessions (sessionToken, userId, expires) VALUES (?, ?, ?)"
+  ).run(SESSION_TOKEN, admin.id, expires)
+}
+
+function cleanupAdminSession() {
+  db.prepare("DELETE FROM sessions WHERE sessionToken = ?").run(SESSION_TOKEN)
 }
 
 function countPosts(): number {
@@ -71,7 +95,10 @@ async function generate(): Promise<{
   const start = Date.now()
   const res = await fetch(`${BASE_URL}/api/generate-posts`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: COOKIE_HEADER,
+    },
     body: JSON.stringify({ clientId: CLIENT_ID, startDate: START_DATE }),
   })
   const durationMs = Date.now() - start
@@ -139,7 +166,7 @@ async function step4_regenerateIdempotency(): Promise<string[]> {
   const oldRows = getPostRows()
   const oldContents = oldRows.map((r) => r.content)
 
-  const { status, body } = await generate()
+  const { status } = await generate()
   assert(status === 200, "Second generate returns 200")
 
   const newRows = getPostRows()
@@ -162,7 +189,8 @@ async function step5_getEndpointGrouping() {
   console.log("\n--- Step 5: GET /api/posts, assert grouping by scheduledDate ---")
 
   const res = await fetch(
-    `${BASE_URL}/api/posts?clientId=${CLIENT_ID}&startDate=${START_DATE}&endDate=${END_DATE}`
+    `${BASE_URL}/api/posts?clientId=${CLIENT_ID}&startDate=${START_DATE}&endDate=${END_DATE}`,
+    { headers: { Cookie: COOKIE_HEADER } }
   )
   assert(res.status === 200, "GET /api/posts returns 200")
 
@@ -261,7 +289,7 @@ async function step7_rejectionCountCarryForward() {
     "Rejection counts are 2 before regeneration"
   )
 
-  const { status, body } = await generate()
+  const { status } = await generate()
   assert(status === 200, "Generate after rejection returns 200", `got ${status}`)
 
   // Wednesday should now have new draft rows with rejectionCount = 2
@@ -329,11 +357,17 @@ async function main() {
 
   // Check server is reachable
   try {
-    const healthCheck = await fetch(`${BASE_URL}/api/posts?clientId=x&startDate=2026-01-01&endDate=2026-01-07`)
-    if (!healthCheck.ok && healthCheck.status !== 400) {
+    createAdminSession()
+
+    const healthCheck = await fetch(
+      `${BASE_URL}/api/posts?clientId=${CLIENT_ID}&startDate=2026-01-01&endDate=2026-01-07`,
+      { headers: { Cookie: COOKIE_HEADER } }
+    )
+    if (!healthCheck.ok) {
       throw new Error(`Server returned ${healthCheck.status}`)
     }
-  } catch (e) {
+  } catch {
+    cleanupAdminSession()
     console.error("\nERROR: Dev server not reachable at localhost:3000. Start it with `npm run dev` first.")
     process.exit(1)
   }
@@ -352,6 +386,7 @@ async function main() {
     // Cleanup
     console.log("\n--- Cleanup ---")
     resetPosts()
+    cleanupAdminSession()
     console.log("Posts table reset to empty.")
     db.close()
   }
