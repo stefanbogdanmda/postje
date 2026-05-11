@@ -89,8 +89,8 @@ Picked over `drizzle-orm/neon-http` because the HTTP driver doesn't support tran
 **Test DB: PGlite (`@electric-sql/pglite`) via `drizzle-orm/pglite`.**
 PGlite is a single-file in-memory Postgres. Tests stay fast (no Docker, no real network), and they run the same dialect as production. The alternative — keeping SQLite for tests — would mean two schema files, which defeats the migration.
 
-**Timestamps: `timestamp({ mode: "date" })`, not `timestamptz`.**
-Drizzle's `timestamp` maps to Postgres `timestamp without time zone`. With `mode: "date"` Drizzle returns JS `Date` objects, matching the current better-sqlite3 behaviour. All our timestamps are server-set with `new Date()`, so they're stored as UTC. No app behaviour change.
+**Timestamps: `timestamp({ withTimezone: true, mode: "date" })` (TIMESTAMPTZ).**
+Postgres stores TIMESTAMPTZ values in UTC and returns them as JS `Date` objects (`mode: "date"`). This matches the timezone-agnostic behaviour of the previous SQLite `integer({ mode: "timestamp_ms" })` columns (which stored epoch milliseconds, also UTC-equivalent). Plain `TIMESTAMP WITHOUT TIME ZONE` was the initial choice but was flipped during Task 2 code review — TIMESTAMPTZ is the universally-recommended default and is cheap to set before data accumulates.
 
 **JSON columns: `jsonb()`.**
 Current schema uses `text({ mode: "json" })` for `photos.analysis`. Postgres's `jsonb` is the right replacement — typed, queryable, indexable.
@@ -271,9 +271,9 @@ export const users = pgTable("users", {
   role: text("role", { enum: ["client", "admin"] })
     .notNull()
     .default("client"),
-  emailVerified: timestamp("emailVerified", { mode: "date" }),
+  emailVerified: timestamp("emailVerified", { withTimezone: true, mode: "date" }),
   hasLoggedIn: boolean("hasLoggedIn").notNull().default(false),
-  createdAt: timestamp("createdAt", { mode: "date" })
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
   image: text("image"),
@@ -297,10 +297,10 @@ export const clients = pgTable("clients", {
   businessType: text("businessType"),
   productsServices: text("productsServices"),
   logoUrl: text("logoUrl"),
-  createdAt: timestamp("createdAt", { mode: "date" })
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: timestamp("updatedAt", { mode: "date" })
+  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
@@ -321,8 +321,8 @@ export const photos = pgTable("photos", {
   mimeType: text("mimeType").notNull(),
   sizeBytes: integer("sizeBytes").notNull(),
   analysis: jsonb("analysis").$type<PhotoAnalysis>(),
-  analyzedAt: timestamp("analyzedAt", { mode: "date" }),
-  createdAt: timestamp("createdAt", { mode: "date" })
+  analyzedAt: timestamp("analyzedAt", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
@@ -350,19 +350,19 @@ export const posts = pgTable(
     content: text("content").notNull(),
     photoId: text("photoId").references(() => photos.id),
     reasoning: text("reasoning").notNull(),
-    publishAt: timestamp("publishAt", { mode: "date" }),
+    publishAt: timestamp("publishAt", { withTimezone: true, mode: "date" }),
     rejectionCount: integer("rejectionCount").notNull().default(0),
-    approvedAt: timestamp("approvedAt", { mode: "date" }),
-    rejectedAt: timestamp("rejectedAt", { mode: "date" }),
-    publishedAt: timestamp("publishedAt", { mode: "date" }),
+    approvedAt: timestamp("approvedAt", { withTimezone: true, mode: "date" }),
+    rejectedAt: timestamp("rejectedAt", { withTimezone: true, mode: "date" }),
+    publishedAt: timestamp("publishedAt", { withTimezone: true, mode: "date" }),
     publishError: text("publishError"),
-    firstSeenAt: timestamp("firstSeenAt", { mode: "date" }),
-    alertedAt: timestamp("alertedAt", { mode: "date" }),
-    regenLimitAlertedAt: timestamp("regenLimitAlertedAt", { mode: "date" }),
-    createdAt: timestamp("createdAt", { mode: "date" })
+    firstSeenAt: timestamp("firstSeenAt", { withTimezone: true, mode: "date" }),
+    alertedAt: timestamp("alertedAt", { withTimezone: true, mode: "date" }),
+    regenLimitAlertedAt: timestamp("regenLimitAlertedAt", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
       .notNull()
       .$defaultFn(() => new Date()),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -409,7 +409,7 @@ export const sessions = pgTable("sessions", {
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expires: timestamp("expires", { mode: "date" }).notNull(),
+  expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
 })
 
 // ──────────────────────────────────────────────
@@ -420,7 +420,7 @@ export const verificationTokens = pgTable(
   {
     identifier: text("identifier").notNull(),
     token: text("token").notNull().unique(),
-    expires: timestamp("expires", { mode: "date" }).notNull(),
+    expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })]
 )
@@ -436,7 +436,7 @@ export const deletionAuditLog = pgTable("deletion_audit_log", {
   deletedUserEmail: text("deletedUserEmail").notNull(),
   deletedUserId: text("deletedUserId").notNull(),
   deletedBy: text("deletedBy").notNull(),
-  deletedAt: timestamp("deletedAt", { mode: "date" })
+  deletedAt: timestamp("deletedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
