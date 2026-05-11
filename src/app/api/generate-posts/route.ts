@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
-import { photos } from "@/db/schema"
+import { clients, photos } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { getAnthropicClient } from "@/lib/ai/client"
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
 import { validatePosts } from "@/lib/ai/validate-posts"
-import { cafeDeHoek } from "@/data/clients/cafe-de-hoek"
+import { buildClientProfile } from "@/lib/ai/client-profile"
 import {
   readRejectionCounts,
   replacePostsForOpenDays,
@@ -81,8 +81,23 @@ export async function POST(request: NextRequest) {
     const rejectionCounts = readRejectionCounts(db, clientId, openDates)
 
     // Load client profile
-    // TODO(v2): Load from DB by clientId instead of hardcoded import
-    const clientProfile = cafeDeHoek
+    const clientRow = await db
+      .select({
+        businessName: clients.businessName,
+        location: clients.location,
+        industry: clients.industry,
+        businessType: clients.businessType,
+        productsServices: clients.productsServices,
+      })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .get()
+
+    if (!clientRow) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 })
+    }
+
+    const clientProfile = buildClientProfile(clientRow)
 
     // Load analyzed photos
     const anthropic = getAnthropicClient()
