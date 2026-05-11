@@ -35,13 +35,13 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
   }
 
   // Check for duplicate email
-  const existingUser = await db
+  const existingUsers = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, email.toLowerCase()))
-    .get()
+    .limit(1)
 
-  if (existingUser) {
+  if (existingUsers.length > 0) {
     return { error: "A user with this email already exists." }
   }
 
@@ -136,13 +136,13 @@ export async function updateClient(
   }
 
   // Verify the client exists
-  const existingClient = await db
+  const existingClients = await db
     .select({ id: clients.id })
     .from(clients)
     .where(eq(clients.id, clientId))
-    .get()
+    .limit(1)
 
-  if (!existingClient) {
+  if (existingClients.length === 0) {
     return { error: "Client not found." }
   }
 

@@ -20,11 +20,12 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  const client = db
+  const clientRows = await db
     .select({ id: clients.id })
     .from(clients)
     .where(eq(clients.userId, session.user.id))
-    .get()
+    .limit(1)
+  const client = clientRows[0]
 
   if (!client) {
     redirect("/login")
@@ -33,7 +34,7 @@ export default async function DashboardPage() {
   const { startDate: weekStart, endDate: weekEndStr } =
     getGenerationWeekRange()
 
-  const posts = getPostsByDateRange(db, client.id, weekStart, weekEndStr)
+  const posts = await getPostsByDateRange(db, client.id, weekStart, weekEndStr)
 
   const pendingPosts: Post[] = posts.filter((p) => p.status === "draft")
   const approvedPosts: Post[] = posts.filter((p) => p.status === "approved")
@@ -47,7 +48,7 @@ export default async function DashboardPage() {
     .map((p) => p.id)
 
   if (unseenPendingIds.length > 0) {
-    markPostsAsSeen(db, unseenPendingIds, client.id)
+    await markPostsAsSeen(db, unseenPendingIds, client.id)
   }
 
   return (

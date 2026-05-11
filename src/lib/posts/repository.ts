@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, lt, inArray, isNull, sql } from "drizzle-orm"
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
 import {
@@ -10,7 +11,15 @@ import {
   type PostStatus,
 } from "./config"
 
-type Db = BetterSQLite3Database<typeof schema>
+/**
+ * Accept any Postgres-dialect Drizzle database. In production this is a
+ * NeonDatabase; in tests it's a PgliteDatabase. Both extend PgDatabase.
+ */
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
 
 /** Statuses that block deletion during regeneration. */
 const LOCKED_STATUSES: PostStatus[] = ["approved", "published", "failed"]
@@ -46,24 +55,29 @@ function assertChanged(
   notFoundMessage: string,
   staleMessage: string
 ): void {
-  const changes =
-    typeof result === "object" && result !== null && "changes" in result
-      ? Number((result as { changes: unknown }).changes)
-      : 0
+  // Postgres drivers differ on the property name for "rows changed":
+  //   - node-postgres / Neon serverless → `rowCount` (number | null)
+  //   - PGlite (used in tests)           → `affectedRows` (number | undefined)
+  // We probe both defensively so this works across runtimes.
+  if (typeof result !== "object" || result === null) {
+    throw new Error(`${notFoundMessage}. ${staleMessage}`)
+  }
+  const r = result as { rowCount?: number | null; affectedRows?: number | null }
+  const rowCount = Number(r.rowCount ?? r.affectedRows ?? 0)
 
-  if (changes === 0) {
+  if (rowCount === 0) {
     throw new Error(`${notFoundMessage}. ${staleMessage}`)
   }
 }
 
-function getClientPostTime(db: Db, clientId: string): string {
-  const client = db
+async function getClientPostTime(db: Db, clientId: string): Promise<string> {
+  const rows = await db
     .select({ industry: schema.clients.industry })
     .from(schema.clients)
     .where(eq(schema.clients.id, clientId))
-    .get()
+    .limit(1)
 
-  const industry = client?.industry?.toLowerCase().trim()
+  const industry = rows[0]?.industry?.toLowerCase().trim()
   if (!industry) return DEFAULT_POST_TIME
 
   const exactMatch = INDUSTRY_POST_TIMES[industry]
@@ -86,7 +100,7 @@ function buildPublishAt(scheduledDate: string, postTime: string): Date {
  * Insert post rows into the database. All rows are inserted in a
  * single transaction — either all succeed or none do.
  */
-export function insertPosts(
+export async function insertPosts(
   db: Db,
   rows: Array<{
     clientId: string
@@ -98,7 +112,9 @@ export function insertPosts(
     reasoning: string
     rejectionCount?: number
   }>
-): void {
+): Promise<void> {
+  if (rows.length === 0) return
+
   const values = rows.map((row) => ({
     clientId: row.clientId,
     platform: row.platform,
@@ -110,10 +126,8 @@ export function insertPosts(
     rejectionCount: row.rejectionCount ?? 0,
   }))
 
-  db.transaction((tx) => {
-    for (const value of values) {
-      tx.insert(schema.posts).values(value).run()
-    }
+  await db.transaction(async (tx) => {
+    await tx.insert(schema.posts).values(values)
   })
 }
 
@@ -121,13 +135,13 @@ export function insertPosts(
  * Query posts for a client within a date range (inclusive).
  * Returns rows ordered by scheduledDate, then platform.
  */
-export function getPostsByDateRange(
+export async function getPostsByDateRange(
   db: Db,
   clientId: string,
   startDate: string,
   endDate: string
-): Post[] {
-  return db
+): Promise<Post[]> {
+  const rows = await db
     .select(postSelect)
     .from(schema.posts)
     .leftJoin(schema.photos, eq(schema.posts.photoId, schema.photos.id))
@@ -139,7 +153,8 @@ export function getPostsByDateRange(
       )
     )
     .orderBy(schema.posts.scheduledDate, schema.posts.platform)
-    .all() as Post[]
+
+  return rows as Post[]
 }
 
 /**
@@ -149,14 +164,14 @@ export function getPostsByDateRange(
  *
  * Returns a map keyed by "scheduledDate:platform".
  */
-export function readRejectionCounts(
+export async function readRejectionCounts(
   db: Db,
   clientId: string,
   scheduledDates: string[]
-): Map<string, number> {
+): Promise<Map<string, number>> {
   if (scheduledDates.length === 0) return new Map()
 
-  const rejected = db
+  const rejected = await db
     .select({
       scheduledDate: schema.posts.scheduledDate,
       platform: schema.posts.platform,
@@ -170,7 +185,6 @@ export function readRejectionCounts(
         eq(schema.posts.status, "rejected")
       )
     )
-    .all()
 
   const counts = new Map<string, number>()
   for (const row of rejected) {
@@ -188,7 +202,7 @@ export function readRejectionCounts(
  *
  * Approved, published, and failed posts are never deleted.
  */
-export function replacePostsForOpenDays(
+export async function replacePostsForOpenDays(
   db: Db,
   clientId: string,
   scheduledDates: string[],
@@ -202,11 +216,12 @@ export function replacePostsForOpenDays(
     reasoning: string
     rejectionCount?: number
   }>
-): void {
-  db.transaction((tx) => {
+): Promise<void> {
+  await db.transaction(async (tx) => {
     // Delete replaceable posts
     if (scheduledDates.length > 0) {
-      tx.delete(schema.posts)
+      await tx
+        .delete(schema.posts)
         .where(
           and(
             eq(schema.posts.clientId, clientId),
@@ -214,23 +229,21 @@ export function replacePostsForOpenDays(
             inArray(schema.posts.status, REPLACEABLE_STATUSES)
           )
         )
-        .run()
     }
 
     // Insert new rows
-    for (const row of newRows) {
-      tx.insert(schema.posts)
-        .values({
-          clientId: row.clientId,
-          platform: row.platform,
-          scheduledDate: row.scheduledDate,
-          status: row.status ?? "draft",
-          content: row.content,
-          photoId: row.photoId ?? null,
-          reasoning: row.reasoning,
-          rejectionCount: row.rejectionCount ?? 0,
-        })
-        .run()
+    if (newRows.length > 0) {
+      const values = newRows.map((row) => ({
+        clientId: row.clientId,
+        platform: row.platform,
+        scheduledDate: row.scheduledDate,
+        status: row.status ?? "draft",
+        content: row.content,
+        photoId: row.photoId ?? null,
+        reasoning: row.reasoning,
+        rejectionCount: row.rejectionCount ?? 0,
+      }))
+      await tx.insert(schema.posts).values(values)
     }
   })
 }
@@ -239,13 +252,13 @@ export function replacePostsForOpenDays(
  * Find days in a date range that have at least one locked post
  * (approved, published, or failed). These days cannot be regenerated.
  */
-export function getLockedDays(
+export async function getLockedDays(
   db: Db,
   clientId: string,
   startDate: string,
   endDate: string
-): LockedDay[] {
-  const rows = db
+): Promise<LockedDay[]> {
+  const rows = await db
     .select({
       scheduledDate: schema.posts.scheduledDate,
       photoId: schema.posts.photoId,
@@ -259,7 +272,6 @@ export function getLockedDays(
         inArray(schema.posts.status, LOCKED_STATUSES)
       )
     )
-    .all()
 
   // Deduplicate by scheduledDate (multiple platform rows per day)
   const dayMap = new Map<string, boolean>()
@@ -278,12 +290,12 @@ export function getLockedDays(
  * Find a single post by ID, scoped to the given client.
  * Returns null if no matching post exists.
  */
-export function getPostById(
+export async function getPostById(
   db: Db,
   postId: string,
   clientId: string
-): Post | null {
-  const row = db
+): Promise<Post | null> {
+  const rows = await db
     .select(postSelect)
     .from(schema.posts)
     .leftJoin(schema.photos, eq(schema.posts.photoId, schema.photos.id))
@@ -293,22 +305,22 @@ export function getPostById(
         eq(schema.posts.clientId, clientId)
       )
     )
-    .get()
+    .limit(1)
 
-  return (row as Post) ?? null
+  return (rows[0] as Post | undefined) ?? null
 }
 
 /**
  * Approve a draft post. Optionally updates the content (e.g. after
  * client edits). Throws if the post is not found or not in draft status.
  */
-export function approvePost(
+export async function approvePost(
   db: Db,
   postId: string,
   clientId: string,
   newContent?: string
-): Post {
-  const post = getPostById(db, postId, clientId)
+): Promise<Post> {
+  const post = await getPostById(db, postId, clientId)
 
   if (!post) {
     throw new Error(`Post not found: ${postId}`)
@@ -318,7 +330,7 @@ export function approvePost(
   }
 
   const now = new Date()
-  const postTime = getClientPostTime(db, clientId)
+  const postTime = await getClientPostTime(db, clientId)
   const updates: Record<string, unknown> = {
     status: "approved",
     approvedAt: now,
@@ -329,7 +341,8 @@ export function approvePost(
     updates.content = newContent
   }
 
-  const result = db.update(schema.posts)
+  const result = await db
+    .update(schema.posts)
     .set(updates)
     .where(
       and(
@@ -338,7 +351,6 @@ export function approvePost(
         eq(schema.posts.status, "draft")
       )
     )
-    .run()
 
   assertChanged(
     result,
@@ -346,7 +358,7 @@ export function approvePost(
     "Cannot approve post because it is no longer a draft"
   )
 
-  return getPostById(db, postId, clientId) as Post
+  return (await getPostById(db, postId, clientId)) as Post
 }
 
 /**
@@ -354,12 +366,12 @@ export function approvePost(
  * timestamp, and increments the rejection count.
  * Throws if the post is not found or not in draft status.
  */
-export function rejectPost(
+export async function rejectPost(
   db: Db,
   postId: string,
   clientId: string
-): Post {
-  const post = getPostById(db, postId, clientId)
+): Promise<Post> {
+  const post = await getPostById(db, postId, clientId)
 
   if (!post) {
     throw new Error(`Post not found: ${postId}`)
@@ -370,7 +382,8 @@ export function rejectPost(
 
   const now = new Date()
 
-  const result = db.update(schema.posts)
+  const result = await db
+    .update(schema.posts)
     .set({
       status: "rejected",
       rejectedAt: now,
@@ -384,7 +397,6 @@ export function rejectPost(
         eq(schema.posts.status, "draft")
       )
     )
-    .run()
 
   assertChanged(
     result,
@@ -392,7 +404,7 @@ export function rejectPost(
     "Cannot reject post because it is no longer a draft"
   )
 
-  return getPostById(db, postId, clientId) as Post
+  return (await getPostById(db, postId, clientId)) as Post
 }
 
 /**
@@ -400,14 +412,14 @@ export function rejectPost(
  * Increments rejectionCount, resets status to "draft", and
  * updates the timestamp. Throws if the post is not found.
  */
-export function regeneratePost(
+export async function regeneratePost(
   db: Db,
   postId: string,
   clientId: string,
   newContent: string,
   newReasoning: string
-): Post {
-  const post = getPostById(db, postId, clientId)
+): Promise<Post> {
+  const post = await getPostById(db, postId, clientId)
 
   if (!post) {
     throw new Error(`Post not found: ${postId}`)
@@ -418,7 +430,8 @@ export function regeneratePost(
 
   const now = new Date()
 
-  const result = db.update(schema.posts)
+  const result = await db
+    .update(schema.posts)
     .set({
       content: newContent,
       reasoning: newReasoning,
@@ -433,7 +446,6 @@ export function regeneratePost(
         eq(schema.posts.status, "draft")
       )
     )
-    .run()
 
   assertChanged(
     result,
@@ -441,7 +453,7 @@ export function regeneratePost(
     "Cannot regenerate post because it is no longer a draft"
   )
 
-  return getPostById(db, postId, clientId) as Post
+  return (await getPostById(db, postId, clientId)) as Post
 }
 
 /**
@@ -450,18 +462,19 @@ export function regeneratePost(
  * have a `firstSeenAt` are not overwritten. Posts owned by other clients
  * are silently skipped (tenant isolation).
  *
- * Safe to call on every dashboard load. Single UPDATE statement; SQLite
+ * Safe to call on every dashboard load. Single UPDATE statement; Postgres
  * handles the IN clause natively.
  */
-export function markPostsAsSeen(
+export async function markPostsAsSeen(
   db: Db,
   postIds: string[],
   clientId: string,
   now: Date = new Date()
-): void {
+): Promise<void> {
   if (postIds.length === 0) return
 
-  db.update(schema.posts)
+  await db
+    .update(schema.posts)
     .set({ firstSeenAt: now })
     .where(
       and(
@@ -470,7 +483,6 @@ export function markPostsAsSeen(
         isNull(schema.posts.firstSeenAt)
       )
     )
-    .run()
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
@@ -493,10 +505,10 @@ export interface StalePost {
  *
  * Joins clients to include businessName for the email subject.
  */
-export function findStalePosts(db: Db, now: Date): StalePost[] {
+export async function findStalePosts(db: Db, now: Date): Promise<StalePost[]> {
   const cutoff = new Date(now.getTime() - TWENTY_FOUR_HOURS_MS)
 
-  const rows = db
+  const rows = await db
     .select({
       id: schema.posts.id,
       clientId: schema.posts.clientId,
@@ -515,7 +527,6 @@ export function findStalePosts(db: Db, now: Date): StalePost[] {
         isNull(schema.posts.alertedAt)
       )
     )
-    .all()
 
   return rows as StalePost[]
 }
@@ -524,8 +535,13 @@ export function findStalePosts(db: Db, now: Date): StalePost[] {
  * Mark a single post as alerted. Idempotent — running twice has no effect
  * because the WHERE clause requires alertedAt IS NULL.
  */
-export function markPostAlerted(db: Db, postId: string, now: Date = new Date()): void {
-  db.update(schema.posts)
+export async function markPostAlerted(
+  db: Db,
+  postId: string,
+  now: Date = new Date()
+): Promise<void> {
+  await db
+    .update(schema.posts)
     .set({ alertedAt: now })
     .where(
       and(
@@ -533,7 +549,6 @@ export function markPostAlerted(db: Db, postId: string, now: Date = new Date()):
         isNull(schema.posts.alertedAt)
       )
     )
-    .run()
 }
 
 export interface RegenLimitPost {
@@ -556,8 +571,8 @@ export interface RegenLimitPost {
  * The threshold is `MAX_REJECTIONS` from src/lib/posts/config.ts,
  * which is also enforced in regeneratePostAction.
  */
-export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
-  const rows = db
+export async function findPostsAtRegenLimit(db: Db): Promise<RegenLimitPost[]> {
+  const rows = await db
     .select({
       id: schema.posts.id,
       clientId: schema.posts.clientId,
@@ -576,7 +591,6 @@ export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
         isNull(schema.posts.regenLimitAlertedAt)
       )
     )
-    .all()
 
   return rows as RegenLimitPost[]
 }
@@ -586,12 +600,13 @@ export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
  * Idempotent — running twice has no effect because the WHERE clause
  * requires regenLimitAlertedAt IS NULL.
  */
-export function markPostRegenLimitAlerted(
+export async function markPostRegenLimitAlerted(
   db: Db,
   postId: string,
   now: Date = new Date()
-): void {
-  db.update(schema.posts)
+): Promise<void> {
+  await db
+    .update(schema.posts)
     .set({ regenLimitAlertedAt: now })
     .where(
       and(
@@ -599,5 +614,4 @@ export function markPostRegenLimitAlerted(
         isNull(schema.posts.regenLimitAlertedAt)
       )
     )
-    .run()
 }

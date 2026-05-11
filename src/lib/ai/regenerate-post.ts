@@ -18,7 +18,7 @@ export async function regenerateSinglePost(
   feedback: string,
   clientId: string
 ): Promise<RegeneratedContent> {
-  const clientRow = await db
+  const clientRows = await db
     .select({
       businessName: clients.businessName,
       location: clients.location,
@@ -28,7 +28,8 @@ export async function regenerateSinglePost(
     })
     .from(clients)
     .where(eq(clients.id, clientId))
-    .get()
+    .limit(1)
+  const clientRow = clientRows[0]
 
   if (!clientRow) {
     throw new Error("Client not found")

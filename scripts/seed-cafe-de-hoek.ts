@@ -1,48 +1,43 @@
-import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
+import { db } from "../src/db"
 import { users, clients } from "../src/db/schema"
 import { eq } from "drizzle-orm"
 import { CAFE_DE_HOEK_CLIENT_ID } from "../src/data/clients/cafe-de-hoek"
 
-const sqlite = new Database("sqlite.db")
-sqlite.pragma("foreign_keys = ON")
-const db = drizzle(sqlite)
-
 async function seed() {
   // Check if the client already exists
-  const existing = await db
+  const existingRows = await db
     .select()
     .from(clients)
     .where(eq(clients.id, CAFE_DE_HOEK_CLIENT_ID))
-    .get()
+    .limit(1)
 
-  if (existing) {
+  if (existingRows.length > 0) {
     console.log(
       `Café de Hoek client already exists (${CAFE_DE_HOEK_CLIENT_ID}). Skipping.`
     )
-    sqlite.close()
     return
   }
 
   // Find the admin user to attach the client to
-  const admin = await db
+  const adminRows = await db
     .select()
     .from(users)
     .where(eq(users.role, "admin"))
-    .get()
+    .limit(1)
+  const admin = adminRows[0]
 
   if (!admin) {
     console.error("Error: No admin user found. Run seed:admin first.")
-    sqlite.close()
     process.exit(1)
   }
 
   // Check if admin already has a client row
-  const existingClientForAdmin = await db
+  const existingClientRows = await db
     .select()
     .from(clients)
     .where(eq(clients.userId, admin.id))
-    .get()
+    .limit(1)
+  const existingClientForAdmin = existingClientRows[0]
 
   if (existingClientForAdmin) {
     console.log(
@@ -50,7 +45,6 @@ async function seed() {
         `Update its ID to ${CAFE_DE_HOEK_CLIENT_ID} manually if needed, ` +
         `or delete and re-run.`
     )
-    sqlite.close()
     return
   }
 
@@ -68,11 +62,9 @@ async function seed() {
   console.log(
     `Café de Hoek client created with ID: ${CAFE_DE_HOEK_CLIENT_ID}`
   )
-  sqlite.close()
 }
 
 seed().catch((err) => {
   console.error("Seed script failed:", err)
-  sqlite.close()
   process.exit(1)
 })

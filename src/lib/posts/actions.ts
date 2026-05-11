@@ -23,12 +23,12 @@ interface ActionResult {
 async function getClientIdForSession(): Promise<string | null> {
   const session = await auth()
   if (!session?.user?.id) return null
-  const client = db
+  const rows = await db
     .select({ id: clients.id })
     .from(clients)
     .where(eq(clients.userId, session.user.id))
-    .get()
-  return client?.id ?? null
+    .limit(1)
+  return rows[0]?.id ?? null
 }
 
 export async function approvePostAction(
@@ -38,7 +38,7 @@ export async function approvePostAction(
   const clientId = await getClientIdForSession()
   if (!clientId) return { success: false, error: "Niet ingelogd" }
   try {
-    const post = repoApprovePost(db, postId, clientId, editedContent)
+    const post = await repoApprovePost(db, postId, clientId, editedContent)
     return { success: true, post }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Onbekende fout"
@@ -52,7 +52,7 @@ export async function rejectPostAction(
   const clientId = await getClientIdForSession()
   if (!clientId) return { success: false, error: "Niet ingelogd" }
   try {
-    const post = repoRejectPost(db, postId, clientId)
+    const post = await repoRejectPost(db, postId, clientId)
     return { success: true, post }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Onbekende fout"
@@ -71,7 +71,7 @@ export async function regeneratePostAction(
       success: false,
       error: "Feedback moet minimaal 10 tekens bevatten",
     }
-  const existingPost = getPostById(db, postId, clientId)
+  const existingPost = await getPostById(db, postId, clientId)
   if (!existingPost) return { success: false, error: "Post niet gevonden" }
   if (existingPost.status !== "draft")
     return {
@@ -90,7 +90,7 @@ export async function regeneratePostAction(
       feedback,
       clientId
     )
-    const post = repoRegeneratePost(
+    const post = await repoRegeneratePost(
       db,
       postId,
       clientId,

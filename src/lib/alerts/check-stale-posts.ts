@@ -1,4 +1,5 @@
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
 import {
   findStalePosts,
@@ -7,7 +8,12 @@ import {
 } from "@/lib/posts/repository"
 import { isWithinNLBusinessHours } from "@/lib/time/business-hours"
 
-type Db = BetterSQLite3Database<typeof schema>
+/** Any Postgres-dialect Drizzle database (Neon in prod, PGlite in tests). */
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
 
 export interface CheckStalePostsResult {
   skipped: boolean
@@ -37,7 +43,7 @@ export async function checkStalePosts(
     }
   }
 
-  const stale = findStalePosts(db, now)
+  const stale = await findStalePosts(db, now)
 
   let sent = 0
   let failed = 0
@@ -45,7 +51,7 @@ export async function checkStalePosts(
   for (const post of stale) {
     const result = await sendEmail(post, appUrl)
     if (result.success) {
-      markPostAlerted(db, post.id, now)
+      await markPostAlerted(db, post.id, now)
       sent++
     } else {
       failed++

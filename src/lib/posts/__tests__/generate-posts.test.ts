@@ -52,23 +52,23 @@ function mockClaudeOutput(dayNames: string[]) {
   }))
 }
 
-beforeEach(() => {
-  db = createTestDb()
-  seedTestClient(db, CLIENT_ID)
+beforeEach(async () => {
+  db = await createTestDb()
+  await seedTestClient(db, CLIENT_ID)
 })
 
 describe("generation orchestration", () => {
-  it("detects locked days and skips them during generation", () => {
+  it("detects locked days and skips them during generation", async () => {
     // Monday approved (locked), rest are open
     const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
-    insertPosts(db, [
+    await insertPosts(db, [
       makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved" }),
       makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "approved" }),
     ])
 
     const dateRange = getDateRange(START_DATE)
     const endDate = dateRange[dateRange.length - 1]
-    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDays = await getLockedDays(db, CLIENT_ID, START_DATE, endDate)
     const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
     const openDates = dateRange.filter((d) => !lockedDates.has(d))
 
@@ -78,20 +78,20 @@ describe("generation orchestration", () => {
     expect(openDates).not.toContain(tuesdayDate)
   })
 
-  it("includes locked-day context in plan prompt", () => {
+  it("includes locked-day context in plan prompt", async () => {
     const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
 
     // Seed the photo row first to satisfy the FK constraint
-    seedTestPhoto(db, CLIENT_ID, "photo-1")
+    await seedTestPhoto(db, CLIENT_ID, "photo-1")
 
-    insertPosts(db, [
+    await insertPosts(db, [
       makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "approved", photoId: "photo-1" }),
       makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "approved", photoId: "photo-1" }),
     ])
 
     const dateRange = getDateRange(START_DATE)
     const endDate = dateRange[dateRange.length - 1]
-    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDays = await getLockedDays(db, CLIENT_ID, START_DATE, endDate)
     const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
     const openDates = dateRange.filter((d) => !lockedDates.has(d))
 
@@ -102,17 +102,17 @@ describe("generation orchestration", () => {
     expect(context).toContain("OPEN (plan these):")
   })
 
-  it("carries rejection counts forward through regeneration", () => {
+  it("carries rejection counts forward through regeneration", async () => {
     const tuesdayDate = dayNameToDate("Tuesday", START_DATE)
 
     // Insert rejected posts with count=2
-    insertPosts(db, [
+    await insertPosts(db, [
       makePostRow({ platform: "instagram", scheduledDate: tuesdayDate, status: "rejected", rejectionCount: 2 }),
       makePostRow({ platform: "facebook", scheduledDate: tuesdayDate, status: "rejected", rejectionCount: 2 }),
     ])
 
     // Read counts BEFORE Claude call (read-only)
-    const counts = readRejectionCounts(db, CLIENT_ID, [tuesdayDate])
+    const counts = await readRejectionCounts(db, CLIENT_ID, [tuesdayDate])
     expect(counts.get(`${tuesdayDate}:instagram`)).toBe(2)
     expect(counts.get(`${tuesdayDate}:facebook`)).toBe(2)
 
@@ -134,17 +134,17 @@ describe("generation orchestration", () => {
     })
 
     // Atomic replace
-    replacePostsForOpenDays(db, CLIENT_ID, [tuesdayDate], newRows)
+    await replacePostsForOpenDays(db, CLIENT_ID, [tuesdayDate], newRows)
 
     // Verify counts carried forward
-    const result = getPostsByDateRange(db, CLIENT_ID, tuesdayDate, tuesdayDate)
+    const result = await getPostsByDateRange(db, CLIENT_ID, tuesdayDate, tuesdayDate)
     expect(result).toHaveLength(2)
     expect(result[0].rejectionCount).toBe(2)
     expect(result[1].rejectionCount).toBe(2)
     expect(result[0].status).toBe("draft")
   })
 
-  it("persists posts with correct scheduledDates from day names", () => {
+  it("persists posts with correct scheduledDates from day names", async () => {
     const claudeOutput = mockClaudeOutput(["Tuesday", "Wednesday", "Thursday"])
 
     const newRows = claudeOutput.flatMap((post) => {
@@ -160,9 +160,9 @@ describe("generation orchestration", () => {
       }))
     })
 
-    replacePostsForOpenDays(db, CLIENT_ID, getDateRange(START_DATE), newRows)
+    await replacePostsForOpenDays(db, CLIENT_ID, getDateRange(START_DATE), newRows)
 
-    const result = getPostsByDateRange(db, CLIENT_ID, START_DATE, dayNameToDate("Monday", START_DATE))
+    const result = await getPostsByDateRange(db, CLIENT_ID, START_DATE, dayNameToDate("Monday", START_DATE))
     expect(result).toHaveLength(6) // 3 days x 2 platforms
 
     const tuesdayPosts = result.filter((p) => p.scheduledDate === "2026-05-12")
@@ -173,7 +173,7 @@ describe("generation orchestration", () => {
     expect(wednesdayPosts).toHaveLength(2)
   })
 
-  it("returns early when all days are locked (no Claude call needed)", () => {
+  it("returns early when all days are locked (no Claude call needed)", async () => {
     const dateRange = getDateRange(START_DATE)
 
     // Approve all 7 days
@@ -181,10 +181,10 @@ describe("generation orchestration", () => {
       makePostRow({ platform: "instagram", scheduledDate: date, status: "approved" }),
       makePostRow({ platform: "facebook", scheduledDate: date, status: "approved" }),
     ])
-    insertPosts(db, allRows)
+    await insertPosts(db, allRows)
 
     const endDate = dateRange[dateRange.length - 1]
-    const lockedDays = getLockedDays(db, CLIENT_ID, START_DATE, endDate)
+    const lockedDays = await getLockedDays(db, CLIENT_ID, START_DATE, endDate)
     const lockedDates = new Set(lockedDays.map((d) => d.scheduledDate))
     const openDates = dateRange.filter((d) => !lockedDates.has(d))
 

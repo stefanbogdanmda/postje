@@ -1,17 +1,21 @@
 import {
-  sqliteTable,
+  pgTable,
   text,
   integer,
+  bigint,
+  boolean,
+  timestamp,
+  jsonb,
   primaryKey,
   index,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core"
+} from "drizzle-orm/pg-core"
 import type { PhotoAnalysis } from "@/lib/ai/types"
 
 // ──────────────────────────────────────────────
 // users — one row per person (clients and Stefan)
 // ──────────────────────────────────────────────
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -21,11 +25,9 @@ export const users = sqliteTable("users", {
   role: text("role", { enum: ["client", "admin"] })
     .notNull()
     .default("client"),
-  emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
-  hasLoggedIn: integer("hasLoggedIn", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  createdAt: integer("createdAt", { mode: "timestamp_ms" })
+  emailVerified: timestamp("emailVerified", { withTimezone: true, mode: "date" }),
+  hasLoggedIn: boolean("hasLoggedIn").notNull().default(false),
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
   image: text("image"),
@@ -34,7 +36,7 @@ export const users = sqliteTable("users", {
 // ──────────────────────────────────────────────
 // clients — business profiles for client users
 // ──────────────────────────────────────────────
-export const clients = sqliteTable("clients", {
+export const clients = pgTable("clients", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -49,10 +51,10 @@ export const clients = sqliteTable("clients", {
   businessType: text("businessType"),
   productsServices: text("productsServices"),
   logoUrl: text("logoUrl"),
-  createdAt: integer("createdAt", { mode: "timestamp_ms" })
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
@@ -60,7 +62,7 @@ export const clients = sqliteTable("clients", {
 // ──────────────────────────────────────────────
 // photos — client photos for post generation
 // ──────────────────────────────────────────────
-export const photos = sqliteTable("photos", {
+export const photos = pgTable("photos", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -72,17 +74,17 @@ export const photos = sqliteTable("photos", {
   originalFilename: text("originalFilename").notNull(),
   mimeType: text("mimeType").notNull(),
   sizeBytes: integer("sizeBytes").notNull(),
-  analysis: text("analysis", { mode: "json" }).$type<PhotoAnalysis>(),
-  analyzedAt: integer("analyzedAt", { mode: "timestamp_ms" }),
-  createdAt: integer("createdAt", { mode: "timestamp_ms" })
+  analysis: jsonb("analysis").$type<PhotoAnalysis>(),
+  analyzedAt: timestamp("analyzedAt", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })
 
 // ──────────────────────────────────────────────
-// posts — generated social media posts, one row per platform per day
+// posts — generated social media posts
 // ──────────────────────────────────────────────
-export const posts = sqliteTable(
+export const posts = pgTable(
   "posts",
   {
     id: text("id")
@@ -102,19 +104,19 @@ export const posts = sqliteTable(
     content: text("content").notNull(),
     photoId: text("photoId").references(() => photos.id),
     reasoning: text("reasoning").notNull(),
-    publishAt: integer("publishAt", { mode: "timestamp_ms" }),
+    publishAt: timestamp("publishAt", { withTimezone: true, mode: "date" }),
     rejectionCount: integer("rejectionCount").notNull().default(0),
-    approvedAt: integer("approvedAt", { mode: "timestamp_ms" }),
-    rejectedAt: integer("rejectedAt", { mode: "timestamp_ms" }),
-    publishedAt: integer("publishedAt", { mode: "timestamp_ms" }),
+    approvedAt: timestamp("approvedAt", { withTimezone: true, mode: "date" }),
+    rejectedAt: timestamp("rejectedAt", { withTimezone: true, mode: "date" }),
+    publishedAt: timestamp("publishedAt", { withTimezone: true, mode: "date" }),
     publishError: text("publishError"),
-    firstSeenAt: integer("firstSeenAt", { mode: "timestamp_ms" }),
-    alertedAt: integer("alertedAt", { mode: "timestamp_ms" }),
-    regenLimitAlertedAt: integer("regenLimitAlertedAt", { mode: "timestamp_ms" }),
-    createdAt: integer("createdAt", { mode: "timestamp_ms" })
+    firstSeenAt: timestamp("firstSeenAt", { withTimezone: true, mode: "date" }),
+    alertedAt: timestamp("alertedAt", { withTimezone: true, mode: "date" }),
+    regenLimitAlertedAt: timestamp("regenLimitAlertedAt", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
       .notNull()
       .$defaultFn(() => new Date()),
-    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
       .notNull()
       .$defaultFn(() => new Date()),
   },
@@ -131,9 +133,9 @@ export const posts = sqliteTable(
 )
 
 // ──────────────────────────────────────────────
-// accounts — Auth.js requirement, links users to auth providers
+// accounts — Auth.js requirement
 // ──────────────────────────────────────────────
-export const accounts = sqliteTable(
+export const accounts = pgTable(
   "accounts",
   {
     userId: text("userId")
@@ -144,7 +146,7 @@ export const accounts = sqliteTable(
     providerAccountId: text("providerAccountId").notNull(),
     refresh_token: text("refresh_token"),
     access_token: text("access_token"),
-    expires_at: integer("expires_at"),
+    expires_at: bigint("expires_at", { mode: "number" }),
     token_type: text("token_type"),
     scope: text("scope"),
     id_token: text("id_token"),
@@ -156,23 +158,23 @@ export const accounts = sqliteTable(
 // ──────────────────────────────────────────────
 // sessions — tracks who is currently logged in
 // ──────────────────────────────────────────────
-export const sessions = sqliteTable("sessions", {
+export const sessions = pgTable("sessions", {
   sessionToken: text("sessionToken").notNull().primaryKey(),
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+  expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
 })
 
 // ──────────────────────────────────────────────
 // verificationTokens — magic link tokens (hashed)
 // ──────────────────────────────────────────────
-export const verificationTokens = sqliteTable(
+export const verificationTokens = pgTable(
   "verificationTokens",
   {
     identifier: text("identifier").notNull(),
     token: text("token").notNull().unique(),
-    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+    expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })]
 )
@@ -180,7 +182,7 @@ export const verificationTokens = sqliteTable(
 // ──────────────────────────────────────────────
 // deletionAuditLog — records of deleted accounts
 // ──────────────────────────────────────────────
-export const deletionAuditLog = sqliteTable("deletion_audit_log", {
+export const deletionAuditLog = pgTable("deletion_audit_log", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -188,7 +190,7 @@ export const deletionAuditLog = sqliteTable("deletion_audit_log", {
   deletedUserEmail: text("deletedUserEmail").notNull(),
   deletedUserId: text("deletedUserId").notNull(),
   deletedBy: text("deletedBy").notNull(),
-  deletedAt: integer("deletedAt", { mode: "timestamp_ms" })
+  deletedAt: timestamp("deletedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 })

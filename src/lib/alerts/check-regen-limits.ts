@@ -1,4 +1,5 @@
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
 import {
   findPostsAtRegenLimit,
@@ -7,7 +8,12 @@ import {
 } from "@/lib/posts/repository"
 import { isWithinNLBusinessHours } from "@/lib/time/business-hours"
 
-type Db = BetterSQLite3Database<typeof schema>
+/** Any Postgres-dialect Drizzle database (Neon in prod, PGlite in tests). */
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
 
 export interface CheckRegenLimitsResult {
   skipped: boolean
@@ -40,7 +46,7 @@ export async function checkRegenLimits(
     }
   }
 
-  const matches = findPostsAtRegenLimit(db)
+  const matches = await findPostsAtRegenLimit(db)
 
   let sent = 0
   let failed = 0
@@ -48,7 +54,7 @@ export async function checkRegenLimits(
   for (const post of matches) {
     const result = await sendEmail(post, appUrl)
     if (result.success) {
-      markPostRegenLimitAlerted(db, post.id, now)
+      await markPostRegenLimitAlerted(db, post.id, now)
       sent++
     } else {
       failed++
