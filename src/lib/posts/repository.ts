@@ -5,6 +5,7 @@ import type { Post, LockedDay } from "./types"
 import {
   DEFAULT_POST_TIME,
   INDUSTRY_POST_TIMES,
+  MAX_REJECTIONS,
   type Platform,
   type PostStatus,
 } from "./config"
@@ -35,6 +36,7 @@ const postSelect = {
   publishError: schema.posts.publishError,
   firstSeenAt: schema.posts.firstSeenAt,
   alertedAt: schema.posts.alertedAt,
+  regenLimitAlertedAt: schema.posts.regenLimitAlertedAt,
   createdAt: schema.posts.createdAt,
   updatedAt: schema.posts.updatedAt,
 }
@@ -529,6 +531,72 @@ export function markPostAlerted(db: Db, postId: string, now: Date = new Date()):
       and(
         eq(schema.posts.id, postId),
         isNull(schema.posts.alertedAt)
+      )
+    )
+    .run()
+}
+
+export interface RegenLimitPost {
+  id: string
+  clientId: string
+  businessName: string
+  platform: "instagram" | "facebook"
+  scheduledDate: string
+  content: string
+  rejectionCount: number
+}
+
+/**
+ * Find every draft post that:
+ *   - has rejectionCount >= MAX_REJECTIONS (3)
+ *   - has NOT yet been alerted (regenLimitAlertedAt IS NULL)
+ *
+ * Joins clients to include businessName for the email subject.
+ *
+ * The threshold is `MAX_REJECTIONS` from src/lib/posts/config.ts,
+ * which is also enforced in regeneratePostAction.
+ */
+export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
+  const rows = db
+    .select({
+      id: schema.posts.id,
+      clientId: schema.posts.clientId,
+      businessName: schema.clients.businessName,
+      platform: schema.posts.platform,
+      scheduledDate: schema.posts.scheduledDate,
+      content: schema.posts.content,
+      rejectionCount: schema.posts.rejectionCount,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.posts.clientId, schema.clients.id))
+    .where(
+      and(
+        eq(schema.posts.status, "draft"),
+        gte(schema.posts.rejectionCount, MAX_REJECTIONS),
+        isNull(schema.posts.regenLimitAlertedAt)
+      )
+    )
+    .all()
+
+  return rows as RegenLimitPost[]
+}
+
+/**
+ * Mark a single post as alerted for hitting the regen limit.
+ * Idempotent — running twice has no effect because the WHERE clause
+ * requires regenLimitAlertedAt IS NULL.
+ */
+export function markPostRegenLimitAlerted(
+  db: Db,
+  postId: string,
+  now: Date = new Date()
+): void {
+  db.update(schema.posts)
+    .set({ regenLimitAlertedAt: now })
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        isNull(schema.posts.regenLimitAlertedAt)
       )
     )
     .run()
