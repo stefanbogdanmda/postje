@@ -67,7 +67,7 @@ After modification, the relevant section should look like:
   (t) => [
     index("posts_client_date_idx").on(t.clientId, t.scheduledDate),
     index("posts_status_publish_idx").on(t.status, t.publishAt),
-    index("posts_stale_alert_idx").on(t.status, t.firstSeenAt, t.alertedAt),
+    index("posts_stale_alert_idx").on(t.status, t.alertedAt, t.firstSeenAt),
     uniqueIndex("posts_client_date_platform_idx").on(
       t.clientId,
       t.scheduledDate,

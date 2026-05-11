@@ -76,7 +76,7 @@ Scheduling: `0 * * * *` (top of every hour, 24x daily). The business-hours gate 
 
 ### New index
 
-`posts_stale_alert_idx` on `(status, firstSeenAt, alertedAt)` — supports the cron query without a full scan.
+`posts_stale_alert_idx` on `(status, alertedAt, firstSeenAt)` — supports the cron query without a full scan. Equality predicates (`status`, `alertedAt IS NULL`) come before the range predicate (`firstSeenAt`) for optimal B-tree usage.
 
 ### Migration handling for existing posts
 
