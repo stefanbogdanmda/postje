@@ -52,6 +52,8 @@ export async function checkRegenLimits(
       sent++
     } else {
       failed++
+      // Log to stderr so it shows up in Vercel runtime logs.
+      // Do NOT stamp regenLimitAlertedAt — next cron run retries this post.
       console.error(
         `[regen-limit-alert] failed to send alert for post ${post.id}: ${result.error ?? "unknown"}`
       )

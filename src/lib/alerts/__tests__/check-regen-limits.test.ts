@@ -41,6 +41,20 @@ describe("checkRegenLimits", () => {
     expect(sendEmail).not.toHaveBeenCalled()
   })
 
+  it("returns alertsSent=0 and calls no email when no posts match during business hours", async () => {
+    const sendEmail = vi.fn().mockResolvedValue({ success: true })
+
+    // Monday 11:00 CET = 10:00 UTC — inside business hours, but no posts inserted
+    const now = new Date("2026-01-12T10:00:00Z")
+
+    const result = await checkRegenLimits({ db, now, sendEmail, appUrl: APP_URL })
+
+    expect(result.skipped).toBe(false)
+    expect(result.alertsSent).toBe(0)
+    expect(result.alertsFailed).toBe(0)
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
+
   it("sends one email per regen-limit post during business hours", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
 
