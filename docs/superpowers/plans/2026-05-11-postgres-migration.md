@@ -215,13 +215,15 @@ In `package.json`, the existing line:
 
 now works as-is — drizzle-kit loads the config, which loads `.env.local`. Leave the script unchanged. Same for `db:generate` and `db:studio`.
 
-- [ ] **Step 1.6: Type-check passes (no implementation yet — should still compile)**
+- [ ] **Step 1.6: Type-check (expected to fail starting here)**
 
 ```bash
 npx tsc --noEmit
 ```
 
-Expected: PASS. (Some files will start failing in later tasks; this is the last green type-check before the migration proper begins.)
+Expected: **FAIL** with errors in `src/db/index.ts`, `src/test/db.ts`, and several `scripts/*.ts` files — they all still import `better-sqlite3` which was uninstalled in Step 1.1. This is correct. Tasks 2 through 7 fix every one of these files. Type-check will stay red across that span and goes green again in Task 8.
+
+If the failure pattern is anything OTHER than "Cannot find module 'better-sqlite3'" or similar in those files, stop and investigate — that would indicate a real problem with the package change.
 
 - [ ] **Step 1.7: Commit**
 
