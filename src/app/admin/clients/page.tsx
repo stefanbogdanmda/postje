@@ -33,7 +33,6 @@ export default async function ClientListPage({
     })
     .from(clients)
     .innerJoin(users, eq(clients.userId, users.id))
-    .all()
 
   return (
     <main style={{ padding: "32px", maxWidth: "800px" }}>

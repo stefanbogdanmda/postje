@@ -17,53 +17,59 @@
  *    or: npx tsx scripts/e2e-post-pipeline.ts
  */
 
-import Database from "better-sqlite3"
 import crypto from "node:crypto"
+import { db } from "../src/db"
+import { posts, users, sessions } from "../src/db/schema"
+import { eq, and, inArray, sql } from "drizzle-orm"
 
 const BASE_URL = "http://localhost:3000"
 const CLIENT_ID = "cafe-de-hoek-00000000"
 const START_DATE = "2026-05-12" // a Tuesday
 const END_DATE = "2026-05-18" // the following Monday
 
-const db = new Database("sqlite.db")
-db.pragma("foreign_keys = ON")
 const SESSION_TOKEN = `e2e-${crypto.randomUUID()}`
 const COOKIE_HEADER = `authjs.session-token=${SESSION_TOKEN}`
 
 // ── Helpers ──────────────────────────────────────────────
 
-function resetPosts() {
-  db.prepare("DELETE FROM posts WHERE clientId = ?").run(CLIENT_ID)
+async function resetPosts() {
+  await db.delete(posts).where(eq(posts.clientId, CLIENT_ID))
 }
 
-function createAdminSession() {
-  const admin = db
-    .prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
-    .get() as { id: string } | undefined
+async function createAdminSession() {
+  const adminRows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.role, "admin"))
+    .limit(1)
+  const admin = adminRows[0]
 
   if (!admin) {
     console.error("\nERROR: No admin user found. Run `npm run seed:admin` first.")
     process.exit(1)
   }
 
-  const expires = new Date(Date.now() + 60 * 60 * 1000).getTime()
-  db.prepare(
-    "INSERT INTO sessions (sessionToken, userId, expires) VALUES (?, ?, ?)"
-  ).run(SESSION_TOKEN, admin.id, expires)
+  const expires = new Date(Date.now() + 60 * 60 * 1000)
+  await db.insert(sessions).values({
+    sessionToken: SESSION_TOKEN,
+    userId: admin.id,
+    expires,
+  })
 }
 
-function cleanupAdminSession() {
-  db.prepare("DELETE FROM sessions WHERE sessionToken = ?").run(SESSION_TOKEN)
+async function cleanupAdminSession() {
+  await db.delete(sessions).where(eq(sessions.sessionToken, SESSION_TOKEN))
 }
 
-function countPosts(): number {
-  const row = db
-    .prepare("SELECT COUNT(*) as count FROM posts WHERE clientId = ?")
-    .get(CLIENT_ID) as { count: number }
-  return row.count
+async function countPosts(): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(posts)
+    .where(eq(posts.clientId, CLIENT_ID))
+  return rows[0]?.count ?? 0
 }
 
-function getPostRows(): Array<{
+async function getPostRows(): Promise<Array<{
   id: string
   clientId: string
   platform: string
@@ -71,20 +77,21 @@ function getPostRows(): Array<{
   status: string
   content: string
   rejectionCount: number
-}> {
-  return db
-    .prepare(
-      "SELECT id, clientId, platform, scheduledDate, status, content, rejectionCount FROM posts WHERE clientId = ? ORDER BY scheduledDate, platform"
-    )
-    .all(CLIENT_ID) as Array<{
-    id: string
-    clientId: string
-    platform: string
-    scheduledDate: string
-    status: string
-    content: string
-    rejectionCount: number
-  }>
+}>> {
+  const rows = await db
+    .select({
+      id: posts.id,
+      clientId: posts.clientId,
+      platform: posts.platform,
+      scheduledDate: posts.scheduledDate,
+      status: posts.status,
+      content: posts.content,
+      rejectionCount: posts.rejectionCount,
+    })
+    .from(posts)
+    .where(eq(posts.clientId, CLIENT_ID))
+    .orderBy(posts.scheduledDate, posts.platform)
+  return rows
 }
 
 async function generate(): Promise<{
@@ -124,8 +131,8 @@ function assert(condition: boolean, label: string, detail?: string) {
 async function step3_generateAndAssert14Rows() {
   console.log("\n--- Step 3: Generate posts, assert 14 draft rows ---")
 
-  resetPosts()
-  assert(countPosts() === 0, "Posts table empty after reset")
+  await resetPosts()
+  assert((await countPosts()) === 0, "Posts table empty after reset")
 
   const { status, body } = await generate()
   assert(status === 200, "POST /api/generate-posts returns 200", `got ${status}`)
@@ -148,7 +155,7 @@ async function step3_generateAndAssert14Rows() {
     `got ${body.skippedLockedCount}`
   )
 
-  const rows = getPostRows()
+  const rows = await getPostRows()
   assert(rows.length === 14, `14 rows in DB`, `got ${rows.length}`)
   assert(
     rows.every((r) => r.status === "draft"),
@@ -163,13 +170,13 @@ async function step3_generateAndAssert14Rows() {
 async function step4_regenerateIdempotency(): Promise<string[]> {
   console.log("\n--- Step 4: Regenerate, assert idempotency (still 14 rows, different content) ---")
 
-  const oldRows = getPostRows()
+  const oldRows = await getPostRows()
   const oldContents = oldRows.map((r) => r.content)
 
   const { status } = await generate()
   assert(status === 200, "Second generate returns 200")
 
-  const newRows = getPostRows()
+  const newRows = await getPostRows()
   assert(newRows.length === 14, `Still 14 rows after regeneration`, `got ${newRows.length}`)
 
   // At least some content should differ (Claude generates different output)
@@ -219,11 +226,17 @@ async function step6_lockedDaySkipped() {
   console.log("\n--- Step 6: Approve first day, regenerate, assert locked day skipped ---")
 
   // Approve Tuesday's posts
-  db.prepare(
-    "UPDATE posts SET status = 'approved' WHERE clientId = ? AND scheduledDate = ?"
-  ).run(CLIENT_ID, START_DATE)
+  await db
+    .update(posts)
+    .set({ status: "approved" })
+    .where(
+      and(
+        eq(posts.clientId, CLIENT_ID),
+        eq(posts.scheduledDate, START_DATE)
+      )
+    )
 
-  const approvedBefore = getPostRows().filter(
+  const approvedBefore = (await getPostRows()).filter(
     (r) => r.scheduledDate === START_DATE && r.status === "approved"
   )
   assert(approvedBefore.length === 2, "Tuesday has 2 approved rows before generate")
@@ -244,7 +257,7 @@ async function step6_lockedDaySkipped() {
   )
 
   // Approved rows should be untouched
-  const approvedAfter = getPostRows().filter(
+  const approvedAfter = (await getPostRows()).filter(
     (r) => r.scheduledDate === START_DATE && r.status === "approved"
   )
   assert(approvedAfter.length === 2, "Tuesday still has 2 approved rows")
@@ -259,14 +272,14 @@ async function step6_lockedDaySkipped() {
   )
 
   // Other rows should be drafts
-  const otherRows = getPostRows().filter((r) => r.scheduledDate !== START_DATE)
+  const otherRows = (await getPostRows()).filter((r) => r.scheduledDate !== START_DATE)
   assert(otherRows.length === 12, `12 non-Tuesday rows`, `got ${otherRows.length}`)
   assert(
     otherRows.every((r) => r.status === "draft"),
     "All non-Tuesday rows are drafts"
   )
 
-  const total = countPosts()
+  const total = await countPosts()
   assert(total === 14, `Total still 14 (2 approved + 12 draft)`, `got ${total}`)
 }
 
@@ -276,11 +289,18 @@ async function step7_rejectionCountCarryForward() {
   const WEDNESDAY = "2026-05-13"
 
   // Reject Wednesday's posts with rejectionCount = 2
-  db.prepare(
-    "UPDATE posts SET status = 'rejected', rejectionCount = 2 WHERE clientId = ? AND scheduledDate = ? AND status = 'draft'"
-  ).run(CLIENT_ID, WEDNESDAY)
+  await db
+    .update(posts)
+    .set({ status: "rejected", rejectionCount: 2 })
+    .where(
+      and(
+        eq(posts.clientId, CLIENT_ID),
+        eq(posts.scheduledDate, WEDNESDAY),
+        eq(posts.status, "draft")
+      )
+    )
 
-  const rejectedBefore = getPostRows().filter(
+  const rejectedBefore = (await getPostRows()).filter(
     (r) => r.scheduledDate === WEDNESDAY && r.status === "rejected"
   )
   assert(rejectedBefore.length === 2, "Wednesday has 2 rejected rows")
@@ -293,7 +313,7 @@ async function step7_rejectionCountCarryForward() {
   assert(status === 200, "Generate after rejection returns 200", `got ${status}`)
 
   // Wednesday should now have new draft rows with rejectionCount = 2
-  const wednesdayAfter = getPostRows().filter(
+  const wednesdayAfter = (await getPostRows()).filter(
     (r) => r.scheduledDate === WEDNESDAY
   )
   assert(wednesdayAfter.length === 2, `Wednesday has 2 rows after regeneration`, `got ${wednesdayAfter.length}`)
@@ -312,14 +332,20 @@ async function step8_allLockedEarlyReturn() {
   console.log("\n--- Step 8: Approve all, assert early return (<2s, no Claude call) ---")
 
   // Approve all remaining draft/rejected rows
-  db.prepare(
-    "UPDATE posts SET status = 'approved' WHERE clientId = ? AND status IN ('draft', 'rejected')"
-  ).run(CLIENT_ID)
+  await db
+    .update(posts)
+    .set({ status: "approved" })
+    .where(
+      and(
+        eq(posts.clientId, CLIENT_ID),
+        inArray(posts.status, ["draft", "rejected"])
+      )
+    )
 
-  const allApproved = getPostRows().filter((r) => r.status === "approved")
+  const allApproved = (await getPostRows()).filter((r) => r.status === "approved")
   assert(allApproved.length === 14, `All 14 rows are approved`, `got ${allApproved.length}`)
 
-  const contentsBefore = getPostRows().map((r) => r.content)
+  const contentsBefore = (await getPostRows()).map((r) => r.content)
 
   const { status, body, durationMs } = await generate()
   assert(status === 200, "All-locked generate returns 200")
@@ -340,7 +366,7 @@ async function step8_allLockedEarlyReturn() {
   )
 
   // DB should be unchanged
-  const contentsAfter = getPostRows().map((r) => r.content)
+  const contentsAfter = (await getPostRows()).map((r) => r.content)
   assert(
     JSON.stringify(contentsBefore) === JSON.stringify(contentsAfter),
     "DB content unchanged after all-locked generate"
@@ -357,7 +383,7 @@ async function main() {
 
   // Check server is reachable
   try {
-    createAdminSession()
+    await createAdminSession()
 
     const healthCheck = await fetch(
       `${BASE_URL}/api/posts?clientId=${CLIENT_ID}&startDate=2026-01-01&endDate=2026-01-07`,
@@ -367,12 +393,12 @@ async function main() {
       throw new Error(`Server returned ${healthCheck.status}`)
     }
   } catch {
-    cleanupAdminSession()
+    await cleanupAdminSession()
     console.error("\nERROR: Dev server not reachable at localhost:3000. Start it with `npm run dev` first.")
     process.exit(1)
   }
 
-  resetPosts()
+  await resetPosts()
   console.log("Posts table reset to empty.")
 
   try {
@@ -385,10 +411,9 @@ async function main() {
   } finally {
     // Cleanup
     console.log("\n--- Cleanup ---")
-    resetPosts()
-    cleanupAdminSession()
+    await resetPosts()
+    await cleanupAdminSession()
     console.log("Posts table reset to empty.")
-    db.close()
   }
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`)
@@ -400,6 +425,5 @@ async function main() {
 
 main().catch((err) => {
   console.error("Fatal error:", err)
-  db.close()
   process.exit(1)
 })

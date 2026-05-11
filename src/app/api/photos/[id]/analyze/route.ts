@@ -18,11 +18,12 @@ export async function POST(
 
     const { id } = await params
 
-    const photo = await db
+    const photoRows = await db
       .select()
       .from(photos)
       .where(eq(photos.id, id))
-      .get()
+      .limit(1)
+    const photo = photoRows[0]
 
     if (!photo) {
       return NextResponse.json(

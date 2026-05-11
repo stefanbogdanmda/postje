@@ -14,16 +14,20 @@ beforeEach(async () => {
   await seedTestClient(db, CLIENT_ID)
 })
 
-function insertDraftAtRegenLimit(platform: "instagram" | "facebook" = "instagram", rejectionCount = 3) {
-  insertPosts(db, [{
+async function insertDraftAtRegenLimit(
+  platform: "instagram" | "facebook" = "instagram",
+  rejectionCount = 3
+) {
+  await insertPosts(db, [{
     clientId: CLIENT_ID,
     platform,
     scheduledDate: "2026-05-12",
     content: "Test post content",
     reasoning: "Test reasoning",
   }])
-  const row = db.select().from(posts).where(eq(posts.platform, platform)).get()
-  db.update(posts).set({ rejectionCount }).where(eq(posts.id, row!.id)).run()
+  const rows = await db.select().from(posts).where(eq(posts.platform, platform)).limit(1)
+  const row = rows[0]
+  await db.update(posts).set({ rejectionCount }).where(eq(posts.id, row!.id))
   return row!.id
 }
 
@@ -58,8 +62,8 @@ describe("checkRegenLimits", () => {
   it("sends one email per regen-limit post during business hours", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
 
-    insertDraftAtRegenLimit("instagram")
-    insertDraftAtRegenLimit("facebook")
+    await insertDraftAtRegenLimit("instagram")
+    await insertDraftAtRegenLimit("facebook")
 
     // Monday 11:00 CET = 10:00 UTC
     const now = new Date("2026-01-12T10:00:00Z")
@@ -74,18 +78,18 @@ describe("checkRegenLimits", () => {
 
   it("marks each post as alerted after successful send", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
-    const postId = insertDraftAtRegenLimit("instagram")
+    const postId = await insertDraftAtRegenLimit("instagram")
 
     const now = new Date("2026-01-12T10:00:00Z")
     await checkRegenLimits({ db, now, sendEmail, appUrl: APP_URL })
 
-    const after = db.select().from(posts).where(eq(posts.id, postId)).get()
-    expect(after?.regenLimitAlertedAt).toEqual(now)
+    const afterRows = await db.select().from(posts).where(eq(posts.id, postId)).limit(1)
+    expect(afterRows[0]?.regenLimitAlertedAt).toEqual(now)
   })
 
   it("does NOT mark post as alerted if the email send fails", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: false, error: "boom" })
-    const postId = insertDraftAtRegenLimit("instagram")
+    const postId = await insertDraftAtRegenLimit("instagram")
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkRegenLimits({ db, now, sendEmail, appUrl: APP_URL })
@@ -93,15 +97,15 @@ describe("checkRegenLimits", () => {
     expect(result.alertsSent).toBe(0)
     expect(result.alertsFailed).toBe(1)
 
-    const after = db.select().from(posts).where(eq(posts.id, postId)).get()
-    expect(after?.regenLimitAlertedAt).toBeNull()
+    const afterRows = await db.select().from(posts).where(eq(posts.id, postId)).limit(1)
+    expect(afterRows[0]?.regenLimitAlertedAt).toBeNull()
   })
 
   it("does not alert posts already alerted (idempotent)", async () => {
     const sendEmail = vi.fn().mockResolvedValue({ success: true })
-    const postId = insertDraftAtRegenLimit("instagram")
-    db.update(posts).set({ regenLimitAlertedAt: new Date("2026-01-11T20:00:00Z") })
-      .where(eq(posts.id, postId)).run()
+    const postId = await insertDraftAtRegenLimit("instagram")
+    await db.update(posts).set({ regenLimitAlertedAt: new Date("2026-01-11T20:00:00Z") })
+      .where(eq(posts.id, postId))
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkRegenLimits({ db, now, sendEmail, appUrl: APP_URL })
@@ -119,8 +123,8 @@ describe("checkRegenLimits", () => {
         : { success: true }
     })
 
-    insertDraftAtRegenLimit("instagram")
-    insertDraftAtRegenLimit("facebook")
+    await insertDraftAtRegenLimit("instagram")
+    await insertDraftAtRegenLimit("facebook")
 
     const now = new Date("2026-01-12T10:00:00Z")
     const result = await checkRegenLimits({ db, now, sendEmail, appUrl: APP_URL })
