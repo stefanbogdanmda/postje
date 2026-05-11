@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
+import { eq, and, gte, lte, lt, inArray, isNull, sql } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
@@ -33,6 +33,8 @@ const postSelect = {
   rejectedAt: schema.posts.rejectedAt,
   publishedAt: schema.posts.publishedAt,
   publishError: schema.posts.publishError,
+  firstSeenAt: schema.posts.firstSeenAt,
+  alertedAt: schema.posts.alertedAt,
   createdAt: schema.posts.createdAt,
   updatedAt: schema.posts.updatedAt,
 }
@@ -438,4 +440,96 @@ export function regeneratePost(
   )
 
   return getPostById(db, postId, clientId) as Post
+}
+
+/**
+ * Stamp `firstSeenAt = now` on every post in `postIds` belonging to
+ * `clientId` whose `firstSeenAt` is currently NULL. Posts that already
+ * have a `firstSeenAt` are not overwritten. Posts owned by other clients
+ * are silently skipped (tenant isolation).
+ *
+ * Safe to call on every dashboard load. Single UPDATE statement; SQLite
+ * handles the IN clause natively.
+ */
+export function markPostsAsSeen(
+  db: Db,
+  postIds: string[],
+  clientId: string,
+  now: Date = new Date()
+): void {
+  if (postIds.length === 0) return
+
+  db.update(schema.posts)
+    .set({ firstSeenAt: now })
+    .where(
+      and(
+        eq(schema.posts.clientId, clientId),
+        inArray(schema.posts.id, postIds),
+        isNull(schema.posts.firstSeenAt)
+      )
+    )
+    .run()
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
+
+export interface StalePost {
+  id: string
+  clientId: string
+  businessName: string
+  platform: "instagram" | "facebook"
+  scheduledDate: string
+  content: string
+  firstSeenAt: Date
+}
+
+/**
+ * Find every draft post that:
+ *   - has firstSeenAt set
+ *   - was first seen more than 24 hours before `now`
+ *   - has NOT yet been alerted
+ *
+ * Joins clients to include businessName for the email subject.
+ */
+export function findStalePosts(db: Db, now: Date): StalePost[] {
+  const cutoff = new Date(now.getTime() - TWENTY_FOUR_HOURS_MS)
+
+  const rows = db
+    .select({
+      id: schema.posts.id,
+      clientId: schema.posts.clientId,
+      businessName: schema.clients.businessName,
+      platform: schema.posts.platform,
+      scheduledDate: schema.posts.scheduledDate,
+      content: schema.posts.content,
+      firstSeenAt: schema.posts.firstSeenAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.posts.clientId, schema.clients.id))
+    .where(
+      and(
+        eq(schema.posts.status, "draft"),
+        lt(schema.posts.firstSeenAt, cutoff),
+        isNull(schema.posts.alertedAt)
+      )
+    )
+    .all()
+
+  return rows as StalePost[]
+}
+
+/**
+ * Mark a single post as alerted. Idempotent — running twice has no effect
+ * because the WHERE clause requires alertedAt IS NULL.
+ */
+export function markPostAlerted(db: Db, postId: string, now: Date = new Date()): void {
+  db.update(schema.posts)
+    .set({ alertedAt: now })
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        isNull(schema.posts.alertedAt)
+      )
+    )
+    .run()
 }

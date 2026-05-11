@@ -17,6 +17,8 @@ export interface Post {
   rejectedAt: Date | null
   publishedAt: Date | null
   publishError: string | null
+  firstSeenAt: Date | null
+  alertedAt: Date | null
   createdAt: Date
   updatedAt: Date
 }
