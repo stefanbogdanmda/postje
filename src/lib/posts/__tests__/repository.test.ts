@@ -15,6 +15,8 @@ import {
   markPostsAsSeen,
   findStalePosts,
   markPostAlerted,
+  findPostsAtRegenLimit,
+  markPostRegenLimitAlerted,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -602,5 +604,142 @@ describe("markPostAlerted", () => {
 
     const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
     expect(after.alertedAt).toEqual(first)
+  })
+})
+
+describe("findPostsAtRegenLimit", () => {
+  // Helper: insert a draft, then patch status / rejectionCount / regenLimitAlertedAt
+  // via direct UPDATE (insertPosts doesn't expose those columns).
+  function insertWithState(opts: {
+    scheduledDate?: string
+    platform?: Platform
+    status: PostStatus
+    rejectionCount: number
+    regenLimitAlertedAt: Date | null
+  }) {
+    insertPosts(db, [
+      makePostRow({
+        scheduledDate: opts.scheduledDate ?? "2026-05-12",
+        platform: opts.platform ?? "instagram",
+      }),
+    ])
+    const post = getPostsByDateRange(
+      db,
+      CLIENT_ID,
+      opts.scheduledDate ?? "2026-05-12",
+      opts.scheduledDate ?? "2026-05-12"
+    ).find((p) => p.platform === (opts.platform ?? "instagram"))!
+
+    db.update(posts)
+      .set({
+        status: opts.status,
+        rejectionCount: opts.rejectionCount,
+        regenLimitAlertedAt: opts.regenLimitAlertedAt,
+      })
+      .where(eq(posts.id, post.id))
+      .run()
+
+    return post.id
+  }
+
+  it("returns a draft post with rejectionCount === 3 and no prior alert", () => {
+    insertWithState({
+      status: "draft",
+      rejectionCount: 3,
+      regenLimitAlertedAt: null,
+    })
+
+    const matches = findPostsAtRegenLimit(db)
+    expect(matches).toHaveLength(1)
+  })
+
+  it("returns posts where rejectionCount is greater than 3 (defensive)", () => {
+    insertWithState({
+      status: "draft",
+      rejectionCount: 5,
+      regenLimitAlertedAt: null,
+    })
+
+    expect(findPostsAtRegenLimit(db)).toHaveLength(1)
+  })
+
+  it("excludes posts where rejectionCount is below 3", () => {
+    insertWithState({ status: "draft", rejectionCount: 0, regenLimitAlertedAt: null, platform: "instagram" })
+    insertWithState({ status: "draft", rejectionCount: 1, regenLimitAlertedAt: null, platform: "facebook" })
+    insertWithState({ status: "draft", rejectionCount: 2, regenLimitAlertedAt: null, scheduledDate: "2026-05-13" })
+
+    expect(findPostsAtRegenLimit(db)).toHaveLength(0)
+  })
+
+  it("excludes posts that are not in draft status", () => {
+    insertWithState({ status: "approved", rejectionCount: 3, regenLimitAlertedAt: null, platform: "instagram" })
+    insertWithState({ status: "rejected", rejectionCount: 3, regenLimitAlertedAt: null, platform: "facebook" })
+    insertWithState({ status: "published", rejectionCount: 3, regenLimitAlertedAt: null, scheduledDate: "2026-05-13" })
+    insertWithState({ status: "failed", rejectionCount: 3, regenLimitAlertedAt: null, scheduledDate: "2026-05-14" })
+
+    expect(findPostsAtRegenLimit(db)).toHaveLength(0)
+  })
+
+  it("excludes posts that have already been alerted", () => {
+    insertWithState({
+      status: "draft",
+      rejectionCount: 3,
+      regenLimitAlertedAt: new Date("2026-05-12T10:00:00Z"),
+    })
+
+    expect(findPostsAtRegenLimit(db)).toHaveLength(0)
+  })
+
+  it("returns multiple matching posts", () => {
+    insertWithState({ status: "draft", rejectionCount: 3, regenLimitAlertedAt: null, platform: "instagram" })
+    insertWithState({ status: "draft", rejectionCount: 3, regenLimitAlertedAt: null, platform: "facebook" })
+
+    expect(findPostsAtRegenLimit(db)).toHaveLength(2)
+  })
+
+  it("includes client businessName and the post's rejectionCount in each row", () => {
+    insertWithState({
+      status: "draft",
+      rejectionCount: 4,
+      regenLimitAlertedAt: null,
+    })
+
+    const matches = findPostsAtRegenLimit(db)
+    expect(matches[0].businessName).toBe("Test Café")
+    expect(matches[0].clientId).toBe(CLIENT_ID)
+    expect(matches[0].rejectionCount).toBe(4)
+  })
+})
+
+describe("markPostRegenLimitAlerted", () => {
+  it("sets regenLimitAlertedAt on the matching post", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const now = new Date("2026-05-13T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, now)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.regenLimitAlertedAt).toEqual(now)
+  })
+
+  it("does NOT overwrite an existing regenLimitAlertedAt", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const first = new Date("2026-05-13T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, first)
+
+    const second = new Date("2026-05-14T10:00:00Z")
+    markPostRegenLimitAlerted(db, post.id, second)
+
+    const after = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(after.regenLimitAlertedAt).toEqual(first)
+  })
+
+  it("is a no-op when the post ID does not exist", () => {
+    const now = new Date("2026-05-13T10:00:00Z")
+    // Should not throw
+    expect(() => markPostRegenLimitAlerted(db, "nonexistent-id", now)).not.toThrow()
   })
 })
