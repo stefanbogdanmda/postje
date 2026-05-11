@@ -3,7 +3,10 @@ import { redirect } from "next/navigation"
 import { db } from "@/db"
 import { eq } from "drizzle-orm"
 import { clients } from "@/db/schema"
-import { getPostsByDateRange } from "@/lib/posts/repository"
+import {
+  getPostsByDateRange,
+  markPostsAsSeen,
+} from "@/lib/posts/repository"
 import { getGenerationWeekRange } from "@/lib/posts/dates"
 import type { Post } from "@/lib/posts/types"
 import PendingPosts from "@/components/dashboard/pending-posts"
@@ -35,6 +38,17 @@ export default async function DashboardPage() {
   const pendingPosts: Post[] = posts.filter((p) => p.status === "draft")
   const approvedPosts: Post[] = posts.filter((p) => p.status === "approved")
   const publishedPosts: Post[] = posts.filter((p) => p.status === "published")
+
+  // Stamp firstSeenAt on pending posts that the client is seeing for the
+  // first time. The repository function is a no-op for posts whose
+  // firstSeenAt is already set, so running it on every load is safe.
+  const unseenPendingIds = pendingPosts
+    .filter((p) => p.firstSeenAt === null)
+    .map((p) => p.id)
+
+  if (unseenPendingIds.length > 0) {
+    markPostsAsSeen(db, unseenPendingIds, client.id)
+  }
 
   return (
     <div className="space-y-10">
