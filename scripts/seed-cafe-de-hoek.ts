@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { CAFE_DE_HOEK_CLIENT_ID } from "../src/data/clients/cafe-de-hoek"
 
 const sqlite = new Database("sqlite.db")
+sqlite.pragma("foreign_keys = ON")
 const db = drizzle(sqlite)
 
 async function seed() {
