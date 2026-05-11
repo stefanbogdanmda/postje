@@ -533,3 +533,50 @@ export function markPostAlerted(db: Db, postId: string, now: Date = new Date()):
     )
     .run()
 }
+
+export interface RegenLimitPost {
+  id: string
+  clientId: string
+  businessName: string
+  platform: "instagram" | "facebook"
+  scheduledDate: string
+  content: string
+  rejectionCount: number
+}
+
+const MAX_REJECTIONS_THRESHOLD = 3
+
+/**
+ * Find every draft post that:
+ *   - has rejectionCount >= MAX_REJECTIONS_THRESHOLD (3)
+ *   - has NOT yet been alerted (regenLimitAlertedAt IS NULL)
+ *
+ * Joins clients to include businessName for the email subject.
+ *
+ * The threshold matches `MAX_REJECTIONS` in src/lib/posts/config.ts.
+ * Kept as a local constant here to avoid a circular config import.
+ */
+export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
+  const rows = db
+    .select({
+      id: schema.posts.id,
+      clientId: schema.posts.clientId,
+      businessName: schema.clients.businessName,
+      platform: schema.posts.platform,
+      scheduledDate: schema.posts.scheduledDate,
+      content: schema.posts.content,
+      rejectionCount: schema.posts.rejectionCount,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.posts.clientId, schema.clients.id))
+    .where(
+      and(
+        eq(schema.posts.status, "draft"),
+        gte(schema.posts.rejectionCount, MAX_REJECTIONS_THRESHOLD),
+        isNull(schema.posts.regenLimitAlertedAt)
+      )
+    )
+    .all()
+
+  return rows as RegenLimitPost[]
+}
