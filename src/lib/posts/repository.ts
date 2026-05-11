@@ -36,6 +36,7 @@ const postSelect = {
   publishError: schema.posts.publishError,
   firstSeenAt: schema.posts.firstSeenAt,
   alertedAt: schema.posts.alertedAt,
+  regenLimitAlertedAt: schema.posts.regenLimitAlertedAt,
   createdAt: schema.posts.createdAt,
   updatedAt: schema.posts.updatedAt,
 }
@@ -578,4 +579,25 @@ export function findPostsAtRegenLimit(db: Db): RegenLimitPost[] {
     .all()
 
   return rows as RegenLimitPost[]
+}
+
+/**
+ * Mark a single post as alerted for hitting the regen limit.
+ * Idempotent — running twice has no effect because the WHERE clause
+ * requires regenLimitAlertedAt IS NULL.
+ */
+export function markPostRegenLimitAlerted(
+  db: Db,
+  postId: string,
+  now: Date = new Date()
+): void {
+  db.update(schema.posts)
+    .set({ regenLimitAlertedAt: now })
+    .where(
+      and(
+        eq(schema.posts.id, postId),
+        isNull(schema.posts.regenLimitAlertedAt)
+      )
+    )
+    .run()
 }
