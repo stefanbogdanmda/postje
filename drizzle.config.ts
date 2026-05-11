@@ -5,7 +5,9 @@ loadEnv({ path: ".env.local" })
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not set in .env.local")
+  throw new Error(
+    "DATABASE_URL environment variable is not set. Add it to .env.local for local development, or ensure it is present in your deployment environment."
+  )
 }
 
 export default defineConfig({
