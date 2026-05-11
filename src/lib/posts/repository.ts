@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
+import { eq, and, gte, lte, inArray, isNull, sql } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import * as schema from "@/db/schema"
 import type { Post, LockedDay } from "./types"
@@ -33,6 +33,8 @@ const postSelect = {
   rejectedAt: schema.posts.rejectedAt,
   publishedAt: schema.posts.publishedAt,
   publishError: schema.posts.publishError,
+  firstSeenAt: schema.posts.firstSeenAt,
+  alertedAt: schema.posts.alertedAt,
   createdAt: schema.posts.createdAt,
   updatedAt: schema.posts.updatedAt,
 }
@@ -438,4 +440,33 @@ export function regeneratePost(
   )
 
   return getPostById(db, postId, clientId) as Post
+}
+
+/**
+ * Stamp `firstSeenAt = now` on every post in `postIds` belonging to
+ * `clientId` whose `firstSeenAt` is currently NULL. Posts that already
+ * have a `firstSeenAt` are not overwritten. Posts owned by other clients
+ * are silently skipped (tenant isolation).
+ *
+ * Safe to call on every dashboard load. Single UPDATE statement; SQLite
+ * handles the IN clause natively.
+ */
+export function markPostsAsSeen(
+  db: Db,
+  postIds: string[],
+  clientId: string,
+  now: Date = new Date()
+): void {
+  if (postIds.length === 0) return
+
+  db.update(schema.posts)
+    .set({ firstSeenAt: now })
+    .where(
+      and(
+        eq(schema.posts.clientId, clientId),
+        inArray(schema.posts.id, postIds),
+        isNull(schema.posts.firstSeenAt)
+      )
+    )
+    .run()
 }

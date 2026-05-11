@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { createTestDb, seedTestClient, seedTestPhoto, type TestDb } from "@/test/db"
-import { users } from "@/db/schema"
+import { users, posts } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import {
   insertPosts,
@@ -12,6 +12,7 @@ import {
   approvePost,
   rejectPost,
   regeneratePost,
+  markPostsAsSeen,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -399,5 +400,69 @@ describe("foreign key enforcement", () => {
     db.delete(users).where(eq(users.id, `user-${CLIENT_ID}`)).run()
 
     expect(getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")).toHaveLength(0)
+  })
+})
+
+describe("markPostsAsSeen", () => {
+  it("sets firstSeenAt on posts where it was NULL", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(post.firstSeenAt).toBeNull()
+
+    const now = new Date("2026-05-12T10:00:00Z")
+    markPostsAsSeen(db, [post.id], CLIENT_ID, now)
+
+    const updated = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(updated.firstSeenAt).toEqual(now)
+  })
+
+  it("does NOT overwrite an existing firstSeenAt value", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+
+    const original = new Date("2026-05-12T10:00:00Z")
+    markPostsAsSeen(db, [post.id], CLIENT_ID, original)
+
+    const later = new Date("2026-05-13T10:00:00Z")
+    markPostsAsSeen(db, [post.id], CLIENT_ID, later)
+
+    const updated = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(updated.firstSeenAt).toEqual(original)
+  })
+
+  it("only affects posts owned by the given client (tenant isolation)", () => {
+    const OTHER_CLIENT = "other-client-002"
+    seedTestClient(db, OTHER_CLIENT)
+
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    db.insert(posts).values({
+      clientId: OTHER_CLIENT,
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      status: "draft",
+      content: "Other client post",
+      reasoning: "x",
+    }).run()
+
+    const ourPost = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    const otherPost = getPostsByDateRange(db, OTHER_CLIENT, "2026-05-12", "2026-05-12")[0]
+
+    const now = new Date("2026-05-12T10:00:00Z")
+    markPostsAsSeen(db, [ourPost.id, otherPost.id], CLIENT_ID, now)
+
+    const ourAfter = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    const otherAfter = getPostsByDateRange(db, OTHER_CLIENT, "2026-05-12", "2026-05-12")[0]
+
+    expect(ourAfter.firstSeenAt).toEqual(now)
+    expect(otherAfter.firstSeenAt).toBeNull() // not ours, not stamped
+  })
+
+  it("is a no-op with an empty postIds array", () => {
+    insertPosts(db, [makePostRow({ platform: "instagram" })])
+    const now = new Date("2026-05-12T10:00:00Z")
+    expect(() => markPostsAsSeen(db, [], CLIENT_ID, now)).not.toThrow()
+
+    const post = getPostsByDateRange(db, CLIENT_ID, "2026-05-12", "2026-05-12")[0]
+    expect(post.firstSeenAt).toBeNull()
   })
 })
