@@ -137,12 +137,38 @@ export async function findStaleDrafts(db: Db, _now: Date): Promise<AttentionItem
   }))
 }
 
+export async function findRegenLimitHits(db: Db, _now: Date): Promise<AttentionItem[]> {
+  const rows = await db
+    .select({
+      ...itemSelect,
+      signalAt: schema.posts.regenLimitAlertedAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.clients.id, schema.posts.clientId))
+    .where(and(
+      eq(schema.posts.status, "draft"),
+      isNotNull(schema.posts.regenLimitAlertedAt),
+    ))
+    .orderBy(asc(schema.posts.regenLimitAlertedAt))
+
+  return rows.map((r) => ({
+    signalType: "regen-limit" as const,
+    postId: r.postId,
+    clientId: r.clientId,
+    businessName: r.businessName,
+    platform: r.platform as "instagram" | "facebook",
+    scheduledDate: r.scheduledDate,
+    signalAt: r.signalAt as Date,
+    contentPreview: preview(r.content),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
     overduePosts: await findOverduePosts(db, now),
     staleDrafts: await findStaleDrafts(db, now),
-    regenLimitHits: [],
+    regenLimitHits: await findRegenLimitHits(db, now),
     unseenDrafts: [],
     recentRejections: [],
     calibrationClients: [],

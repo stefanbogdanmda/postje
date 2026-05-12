@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import {
   findFailedPosts,
   findOverduePosts,
+  findRegenLimitHits,
   findStaleDrafts,
   getAttentionData,
 } from "../attention"
@@ -279,5 +280,57 @@ describe("findStaleDrafts", () => {
 
     const items = await findStaleDrafts(db, new Date("2026-05-12T10:00:00Z"))
     expect(items.map((i) => i.clientId)).toEqual(["client-002", "client-001"])
+  })
+})
+
+describe("findRegenLimitHits", () => {
+  it("returns posts where regenLimitAlertedAt is set and status is draft", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Regen-limit hit",
+      reasoning: "n/a",
+    }])
+    const at = new Date("2026-05-12T06:00:00Z")
+    await db.update(posts).set({ regenLimitAlertedAt: at, rejectionCount: 3 })
+
+    const items = await findRegenLimitHits(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("regen-limit")
+    expect(items[0]!.signalAt).toEqual(at)
+  })
+
+  it("excludes posts whose status is approved or published", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Approved after regen-limit",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({
+      status: "approved",
+      regenLimitAlertedAt: new Date("2026-05-12T06:00:00Z"),
+    })
+
+    const items = await findRegenLimitHits(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes posts where regenLimitAlertedAt is null", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "No regen alert",
+      reasoning: "n/a",
+    }])
+
+    const items = await findRegenLimitHits(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
   })
 })
