@@ -1,15 +1,17 @@
 # Meta Setup Guide — Test Accounts for Social AI
 
-This guide walks you through creating the Meta-side accounts that Social AI needs before it can publish to Facebook and Instagram. Everything in this guide is free. Total time: 30–45 focused minutes. Don't split it across multiple days — Meta's interface is much harder to navigate if you keep losing your place.
+This guide walks you through creating the Meta-side accounts that Social AI needs before it can publish to Facebook and Instagram. Everything in this guide is free. Total time: 25–35 focused minutes. Don't split it across multiple days — Meta's interface is much harder to navigate if you keep losing your place.
 
 You'll come out of this with:
 
 - A test Facebook **Page**
 - A test Instagram **Business** account linked to that Page
 - A **Meta Developer account** + a registered **Meta App** in Development Mode
-- A **long-lived access token** that can post to both
+- The **App ID and App Secret** that Social AI uses to run its OAuth flow
 
-These four things are the keys that let our code talk to Meta. Without them, the cron job we're about to build has nothing to send.
+These four things are the keys that let our code talk to Meta. The OAuth flow built into Social AI (Plan #5a) handles fetching the long-lived page access token automatically — you no longer need to do that by hand.
+
+> **Updated 2026-05-12:** Step 9 below ("Configure the OAuth redirect URI") is new and required for Social AI's Connect button to work. The old Step 10 (manual token fetch via Graph API Explorer) is now **Step 11 — Optional**, kept only for debugging and education. You can stop after Step 10 and proceed straight to the smoke test.
 
 ## Vocabulary You'll See
 
@@ -126,7 +128,20 @@ For each one, after adding, Meta will drop you in its config page. You don't nee
 
 **Expected outcome:** All three products show up in the left sidebar under **Products**.
 
-## Step 9 — Add yourself as an Instagram tester (2 min)
+## Step 9 — Configure the OAuth redirect URI (2 min)
+
+This is the address that Meta sends users back to after they grant access to your App. Social AI's OAuth callback lives at `/api/meta/callback`, so we need to whitelist that exact URL in the App's settings. Without this step, the Connect button in Social AI will fail with a "URL Blocked" error.
+
+1. In the App Dashboard left sidebar, go to **Products** → **Facebook Login for Business** → **Settings** (or **Configuration**, depending on the UI version).
+2. Find the **Valid OAuth Redirect URIs** field.
+3. Paste these two URLs, one per line:
+   - `http://localhost:3000/api/meta/callback` — for local dev
+   - `https://<your-production-domain>/api/meta/callback` — for production (you can leave this off until you have a real domain)
+4. Save.
+
+**Expected outcome:** Both URLs appear in the field. When you eventually click Connect inside Social AI, Meta will redirect back to one of these — anything else gets blocked.
+
+## Step 10 — Add yourself as an Instagram tester (2 min)
 
 This is the step that lets your real personal FB account act on the test setup while the App is in Development Mode.
 
@@ -138,11 +153,23 @@ This is the step that lets your real personal FB account act on the test setup w
 
 **Expected outcome:** The test IG account is now an accepted tester on the App.
 
-## Step 10 — Get a long-lived access token (10 min)
+## You're done with the required setup
+
+If you got this far, you have everything Social AI needs to run the OAuth flow:
+
+- A Facebook Page + linked Instagram Business account
+- A Meta App in Development Mode with the right products, the redirect URI whitelisted, and you as an accepted tester
+- The App ID and App Secret from **App Dashboard → Settings → Basic** — these go into your `.env.local` as `META_APP_ID` and `META_APP_SECRET`
+
+Skip straight to the smoke test for Plan #5a now. The remaining Step 11 below is **optional**.
+
+## Step 11 — Get a long-lived access token manually (10 min, OPTIONAL)
+
+> **Skip this step on your first time through.** Social AI's OAuth flow (Plan #5a) does all of this automatically when you click the Connect button inside the app. This step is kept for two reasons: (a) it explains *what* the OAuth flow is doing under the hood, useful when you debug a Meta error later; (b) if you ever need to test the Graph API directly without running the Social AI app, the manual token is how.
 
 This is the longest step. Read it through once before doing it.
 
-### 10a. Open the Graph API Explorer
+### 11a. Open the Graph API Explorer
 
 1. Go to **developers.facebook.com/tools/explorer**.
 2. In the top right, set **Meta App** to `Social AI Dev`.
@@ -158,7 +185,7 @@ This is the longest step. Read it through once before doing it.
 5. Click **Generate Access Token**. Meta will pop up a permission dialog — accept everything, picking the Café Test Arnhem Page when asked which Page to grant access to.
 6. Copy the token that appears. **This is a short-lived (1-hour) user token.** Save it to a scratchpad — we'll trade it in for a long-lived one in a moment.
 
-### 10b. Confirm the token sees the Page
+### 11b. Confirm the token sees the Page
 
 In the Graph API Explorer, with that token still active:
 
@@ -169,7 +196,7 @@ You should see a JSON response listing your Pages. Find the Café Test Arnhem en
 
 But wait — the user token is currently short-lived, so the Page token derived from it is also short-lived. We need to extend the user token first. Don't skip this.
 
-### 10c. Extend the user token to long-lived (60 days)
+### 11c. Extend the user token to long-lived (60 days)
 
 You'll need your **App ID** and **App Secret**. Find both at:
 
@@ -187,17 +214,17 @@ https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token
 
 The response is JSON with `access_token` and `expires_in`. The `expires_in` should be roughly 5,184,000 seconds = 60 days. **This is your long-lived user token.** Save it.
 
-### 10d. Re-derive the Page token from the long-lived user token
+### 11d. Re-derive the Page token from the long-lived user token
 
 Back in the Graph API Explorer:
 
-1. In the **Access Token** field at the top, paste the long-lived user token from 10c.
+1. In the **Access Token** field at the top, paste the long-lived user token from 11c.
 2. Run `me/accounts` again.
 3. Copy the `access_token` from the Café Test Arnhem entry. **This is your long-lived Page Access Token.** Save it.
 
-### 10e. Find the linked Instagram Business Account ID
+### 11e. Find the linked Instagram Business Account ID
 
-Still in the Explorer, with the Page token from 10d (or still on the user token):
+Still in the Explorer, with the Page token from 11d (or still on the user token):
 
 1. Find your Page ID (from Step 1, or from the `id` field of the `me/accounts` response).
 2. Run: `YOUR_PAGE_ID?fields=instagram_business_account`
@@ -212,30 +239,51 @@ Still in the Explorer, with the Page token from 10d (or still on the user token)
 
 If `instagram_business_account` is missing from the response: your IG account isn't properly linked to the Page (back to Step 3). The most common cause is that the IG account is still "Personal" or "Creator" type instead of "Business".
 
-## What you walk away with
+## What you walk away with — the required set
 
-A scratchpad containing:
+After Step 10, you have everything Social AI needs:
 
 | Variable | Example | What it is |
 |---|---|---|
-| `META_APP_ID` | `123456789012345` | Your Meta App's ID |
-| `META_APP_SECRET` | `abc123...` | Your Meta App's Secret (keep private) |
-| `META_TEST_PAGE_ID` | `61555...` | Café Test Arnhem's Page ID |
-| `META_TEST_PAGE_TOKEN` | `EAA...` (very long) | Long-lived Page Access Token |
-| `META_TEST_IG_USER_ID` | `17841...` | The linked Instagram Business Account ID |
+| `META_APP_ID` | `123456789012345` | Your Meta App's ID. From App Dashboard → Settings → Basic. |
+| `META_APP_SECRET` | `abc123...` | Your Meta App's Secret (keep private). Same screen as App ID. |
 
-We'll wire these into `.env.local` as your "default test client" during development. Real clients will go through an OAuth flow that produces the same set of values per client.
+Plus, configured inside the Meta App itself (not values you copy):
 
-## Sanity check before coming back
+- The Café Test Arnhem Page + linked Instagram Business account
+- The OAuth redirect URI `http://localhost:3000/api/meta/callback` whitelisted
+- Yourself accepted as a tester
 
-Run these three queries in the Graph API Explorer using `META_TEST_PAGE_TOKEN`:
+Add the two values above to `.env.local` along with the encryption key and the redirect URI:
+
+```
+META_APP_ID=<your-app-id>
+META_APP_SECRET=<your-app-secret>
+META_OAUTH_REDIRECT_URI=http://localhost:3000/api/meta/callback
+META_TOKEN_ENCRYPTION_KEY=<generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))">
+META_GRAPH_VERSION=v21.0
+```
+
+Then start the dev server and run the 5a smoke test:
+
+1. `npm run dev`
+2. Sign in as admin
+3. Go to `/admin/clients/<id>`
+4. Click **Connect Instagram / Facebook**
+5. Approve the Meta dialog
+6. Confirm the panel flips to "Connected" with your Page name + IG id
+7. In Drizzle Studio, verify the `meta_connections` row exists with an encrypted token (not the plaintext)
+
+Real clients (when you eventually onboard them) will go through the same OAuth flow — each one ends up with their own row in `meta_connections`.
+
+## Optional sanity check — only if you did Step 11
+
+If you went through Step 11 and have a Page Access Token in hand, you can verify it works using the Graph API Explorer:
 
 1. `me?fields=name` → should return `"Café Test Arnhem"`
 2. `me?fields=instagram_business_account` → should return the IG ID
 3. `me/feed?fields=id&limit=1` → should return `{"data":[]}` (no posts yet) — proves the token can read the Page's feed
 
-If all three return without errors, you're done. Come back and we'll resume the brainstorm.
-
-If anything errors or doesn't match, **screenshot the error and paste it into the chat** — we'll fix it before moving on. Don't try to power through; Meta's errors are cryptic but specific, and the wrong fix wastes hours later.
+If anything errors or doesn't match, **screenshot the error** — most Meta errors are cryptic but specific, and the wrong fix wastes hours later.
 
 Welcome to the world of social media APIs. It's not always like this, but the first time it always is.
