@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { createTestDb, seedTestClient, type TestDb } from "@/test/db"
-import { getAttentionData } from "../attention"
+import { posts } from "@/db/schema"
+import { insertPosts } from "@/lib/posts/repository"
+import { eq } from "drizzle-orm"
+import { findFailedPosts, getAttentionData } from "../attention"
 
 let db: TestDb
 
@@ -35,5 +38,101 @@ describe("getAttentionData (with seeded client but no posts)", () => {
     expect(data.regenLimitHits).toEqual([])
     expect(data.unseenDrafts).toEqual([])
     expect(data.recentRejections).toEqual([])
+  })
+})
+
+describe("findFailedPosts", () => {
+  it("returns posts with status='failed'", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-10",
+      content: "Failed post content here, this is the body of the post that did not publish.",
+      reasoning: "n/a",
+    }])
+    const rows = await db.select().from(posts).limit(1)
+    const updatedAt = new Date("2026-05-12T09:00:00Z")
+    await db.update(posts)
+      .set({ status: "failed", publishError: "rate limit", updatedAt })
+      .where(eq(posts.id, rows[0]!.id))
+
+    const now = new Date("2026-05-12T10:00:00Z")
+    const items = await findFailedPosts(db, now)
+
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("failed")
+    expect(items[0]!.postId).toBe(rows[0]!.id)
+    expect(items[0]!.clientId).toBe("client-001")
+    expect(items[0]!.businessName).toBe("Test Café")
+    expect(items[0]!.platform).toBe("instagram")
+    expect(items[0]!.scheduledDate).toBe("2026-05-10")
+    expect(items[0]!.signalAt).toEqual(updatedAt)
+    expect(items[0]!.contentPreview.length).toBeLessThanOrEqual(80)
+  })
+
+  it("also returns posts with non-null publishError even if status is not failed", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "facebook",
+      scheduledDate: "2026-05-11",
+      content: "Approved but publish error",
+      reasoning: "n/a",
+    }])
+    const rows = await db.select().from(posts).limit(1)
+    await db.update(posts)
+      .set({ status: "approved", publishError: "blocked by meta" })
+      .where(eq(posts.id, rows[0]!.id))
+
+    const items = await findFailedPosts(db, new Date("2026-05-12T10:00:00Z"))
+
+    expect(items).toHaveLength(1)
+  })
+
+  it("does not return healthy drafts or successfully published posts", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [
+      {
+        clientId: "client-001",
+        platform: "instagram",
+        scheduledDate: "2026-05-10",
+        content: "ok draft",
+        reasoning: "n/a",
+      },
+      {
+        clientId: "client-001",
+        platform: "facebook",
+        scheduledDate: "2026-05-10",
+        content: "ok published",
+        reasoning: "n/a",
+      },
+    ])
+    await db.update(posts)
+      .set({ status: "published", publishedAt: new Date("2026-05-10T10:00:00Z") })
+      .where(eq(posts.platform, "facebook"))
+
+    const items = await findFailedPosts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("sorts oldest-signal-first across multiple clients", async () => {
+    await seedTestClient(db, "client-001")
+    await seedTestClient(db, "client-002")
+
+    await insertPosts(db, [
+      { clientId: "client-001", platform: "instagram", scheduledDate: "2026-05-10", content: "A", reasoning: "n/a" },
+      { clientId: "client-002", platform: "instagram", scheduledDate: "2026-05-10", content: "B", reasoning: "n/a" },
+    ])
+    await db.update(posts)
+      .set({ status: "failed", updatedAt: new Date("2026-05-12T09:00:00Z") })
+      .where(eq(posts.clientId, "client-001"))
+    await db.update(posts)
+      .set({ status: "failed", updatedAt: new Date("2026-05-12T05:00:00Z") })
+      .where(eq(posts.clientId, "client-002"))
+
+    const items = await findFailedPosts(db, new Date("2026-05-12T10:00:00Z"))
+
+    expect(items.map((i) => i.clientId)).toEqual(["client-002", "client-001"])
   })
 })
