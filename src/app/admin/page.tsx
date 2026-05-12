@@ -1,85 +1,113 @@
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
 import { db } from "@/db"
-import { users } from "@/db/schema"
-import Link from "next/link"
-import SignOutButton from "@/components/sign-out-button"
-import DeleteUserButton from "./delete-user-button"
+import { getAttentionData } from "@/lib/admin/attention"
+import AttentionSection from "@/components/admin/attention-section"
+import AttentionItemRow from "@/components/admin/attention-item"
+import CalibrationItemRow from "@/components/admin/calibration-item"
 
-export default async function AdminPage() {
-  const session = await auth()
-
-  if (!session || session.user.role !== "admin") {
-    redirect("/login")
-  }
-
-  // Fetch all users from the database
-  const allUsers = await db.select().from(users)
+export default async function AdminAttentionPage() {
+  // Auth + role gate handled by /admin/layout.tsx.
+  const now = new Date()
+  const data = await getAttentionData(db, now)
 
   return (
-    <main style={{ padding: "32px", maxWidth: "800px" }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "32px",
-      }}>
-        <h1 style={{ fontSize: "24px" }}>Admin</h1>
-        <SignOutButton label="Sign out" />
-      </div>
-
-      <h2 style={{ fontSize: "18px", marginBottom: "16px" }}>Users</h2>
-      <table style={{
-        width: "100%",
-        borderCollapse: "collapse",
-      }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #eee", textAlign: "left" }}>
-            <th style={{ padding: "8px" }}>Email</th>
-            <th style={{ padding: "8px" }}>Role</th>
-            <th style={{ padding: "8px" }}>Logged in</th>
-            <th style={{ padding: "8px" }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {allUsers.map((u) => (
-            <tr key={u.id} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: "8px" }}>{u.email}</td>
-              <td style={{ padding: "8px" }}>{u.role}</td>
-              <td style={{ padding: "8px" }}>{u.hasLoggedIn ? "Yes" : "No"}</td>
-              <td style={{ padding: "8px" }}>
-                {u.role !== "admin" && (
-                  <DeleteUserButton userId={u.id} userEmail={u.email} />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ marginTop: "32px" }}>
-        <Link
-          href="/admin/clients"
+    <main
+      style={{
+        padding: "32px",
+        maxWidth: "960px",
+        margin: "0 auto",
+      }}
+    >
+      <header style={{ marginBottom: "12px" }}>
+        <h1 style={{ fontSize: "20px", margin: 0, letterSpacing: "0.02em" }}>
+          Attention
+        </h1>
+        <p
           style={{
-            color: "#1a1a1a",
-            textDecoration: "underline",
-            fontSize: "14px",
+            fontSize: "13px",
+            color: "var(--admin-text-subtle)",
+            margin: "4px 0 0",
           }}
         >
-          Manage clients →
-        </Link>
-        <Link
-          href="/admin/generate-preview"
-          style={{
-            color: "#1a1a1a",
-            textDecoration: "underline",
-            fontSize: "14px",
-            marginLeft: "16px",
-          }}
-        >
-          Generate posts preview →
-        </Link>
-      </div>
+          Wat vraagt nu om je aandacht, over alle klanten heen.
+        </p>
+      </header>
+
+      <AttentionSection
+        title="Failed to publish"
+        count={data.failedPosts.length}
+        severity="critical"
+        emptyMessage="Geen publish-fouten."
+      >
+        {data.failedPosts.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Overdue"
+        count={data.overduePosts.length}
+        severity="critical"
+        emptyMessage="Niets achterstallig."
+      >
+        {data.overduePosts.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Stale drafts"
+        count={data.staleDrafts.length}
+        severity="warn"
+        emptyMessage="Geen drafts die te lang stilliggen."
+      >
+        {data.staleDrafts.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Regen limit hit"
+        count={data.regenLimitHits.length}
+        severity="warn"
+        emptyMessage="Geen klanten vastgelopen op de regen-limit."
+      >
+        {data.regenLimitHits.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Unseen drafts"
+        count={data.unseenDrafts.length}
+        severity="info"
+        emptyMessage="Iedereen heeft z'n drafts gezien."
+      >
+        {data.unseenDrafts.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Recent rejections"
+        count={data.recentRejections.length}
+        severity="info"
+        emptyMessage="Geen afwijzingen de afgelopen 7 dagen."
+      >
+        {data.recentRejections.map((item) => (
+          <AttentionItemRow key={item.postId} item={item} now={now} />
+        ))}
+      </AttentionSection>
+
+      <AttentionSection
+        title="Calibration"
+        count={data.calibrationClients.length}
+        severity="soft"
+        emptyMessage="Geen nieuwe klanten in calibratie."
+      >
+        {data.calibrationClients.map((item) => (
+          <CalibrationItemRow key={item.clientId} item={item} now={now} />
+        ))}
+      </AttentionSection>
     </main>
   )
 }
