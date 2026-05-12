@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { createTestDb, seedTestClient, type TestDb } from "@/test/db"
-import { posts } from "@/db/schema"
+import { clients as clientsTable, posts } from "@/db/schema"
 import { insertPosts } from "@/lib/posts/repository"
 import { eq } from "drizzle-orm"
 import {
+  findCalibrationClients,
   findFailedPosts,
   findOverduePosts,
   findRecentRejections,
@@ -440,5 +441,54 @@ describe("findRecentRejections", () => {
 
     const items = await findRecentRejections(db, new Date("2026-05-12T10:00:00Z"))
     expect(items).toEqual([])
+  })
+})
+
+describe("findCalibrationClients", () => {
+  it("returns clients created within the last 7 days with their post count", async () => {
+    await seedTestClient(db, "client-new")
+    const joinedAt = new Date("2026-05-10T10:00:00Z")
+    await db.update(clientsTable).set({ createdAt: joinedAt }).where(eq(clientsTable.id, "client-new"))
+
+    const items = await findCalibrationClients(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toHaveLength(1)
+    expect(items[0]!.clientId).toBe("client-new")
+    expect(items[0]!.businessName).toBe("Test Café")
+    expect(items[0]!.joinedAt).toEqual(joinedAt)
+    expect(items[0]!.postCount).toBe(0)
+  })
+
+  it("counts posts correctly", async () => {
+    await seedTestClient(db, "client-new")
+    await db.update(clientsTable)
+      .set({ createdAt: new Date("2026-05-10T10:00:00Z") })
+      .where(eq(clientsTable.id, "client-new"))
+    await insertPosts(db, [
+      { clientId: "client-new", platform: "instagram", scheduledDate: "2026-05-12", content: "p1", reasoning: "n/a" },
+      { clientId: "client-new", platform: "facebook",  scheduledDate: "2026-05-12", content: "p2", reasoning: "n/a" },
+    ])
+
+    const items = await findCalibrationClients(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items[0]!.postCount).toBe(2)
+  })
+
+  it("excludes clients older than 7 days", async () => {
+    await seedTestClient(db, "client-old")
+    await db.update(clientsTable)
+      .set({ createdAt: new Date("2026-05-04T09:00:00Z") })
+      .where(eq(clientsTable.id, "client-old"))
+
+    const items = await findCalibrationClients(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("sorts oldest joinedAt first within the calibration window", async () => {
+    await seedTestClient(db, "client-a")
+    await seedTestClient(db, "client-b")
+    await db.update(clientsTable).set({ createdAt: new Date("2026-05-10T10:00:00Z") }).where(eq(clientsTable.id, "client-a"))
+    await db.update(clientsTable).set({ createdAt: new Date("2026-05-07T10:00:00Z") }).where(eq(clientsTable.id, "client-b"))
+
+    const items = await findCalibrationClients(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items.map((i) => i.clientId)).toEqual(["client-b", "client-a"])
   })
 })

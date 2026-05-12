@@ -218,6 +218,32 @@ export async function findRecentRejections(db: Db, now: Date): Promise<Attention
   }))
 }
 
+export async function findCalibrationClients(
+  db: Db,
+  now: Date
+): Promise<CalibrationItem[]> {
+  const since = new Date(now.getTime() - SEVEN_DAYS_MS)
+  const rows = await db
+    .select({
+      clientId: schema.clients.id,
+      businessName: schema.clients.businessName,
+      joinedAt: schema.clients.createdAt,
+      postCount: sql<number>`count(${schema.posts.id})::int`,
+    })
+    .from(schema.clients)
+    .leftJoin(schema.posts, eq(schema.posts.clientId, schema.clients.id))
+    .where(sql`${schema.clients.createdAt} > ${since}`)
+    .groupBy(schema.clients.id, schema.clients.businessName, schema.clients.createdAt)
+    .orderBy(asc(schema.clients.createdAt))
+
+  return rows.map((r) => ({
+    clientId: r.clientId,
+    businessName: r.businessName,
+    joinedAt: r.joinedAt,
+    postCount: Number(r.postCount),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
@@ -226,7 +252,7 @@ export async function getAttentionData(db: Db, now: Date): Promise<AttentionData
     regenLimitHits: await findRegenLimitHits(db, now),
     unseenDrafts: await findUnseenDrafts(db, now),
     recentRejections: await findRecentRejections(db, now),
-    calibrationClients: [],
+    calibrationClients: await findCalibrationClients(db, now),
   }
 }
 
