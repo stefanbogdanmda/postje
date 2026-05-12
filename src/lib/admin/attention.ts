@@ -189,6 +189,35 @@ export async function findUnseenDrafts(db: Db, _now: Date): Promise<AttentionIte
   }))
 }
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+export async function findRecentRejections(db: Db, now: Date): Promise<AttentionItem[]> {
+  const since = new Date(now.getTime() - SEVEN_DAYS_MS)
+  const rows = await db
+    .select({
+      ...itemSelect,
+      signalAt: schema.posts.rejectedAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.clients.id, schema.posts.clientId))
+    .where(and(
+      eq(schema.posts.status, "rejected"),
+      sql`${schema.posts.rejectedAt} > ${since}`,
+    ))
+    .orderBy(asc(schema.posts.rejectedAt))
+
+  return rows.map((r) => ({
+    signalType: "rejected" as const,
+    postId: r.postId,
+    clientId: r.clientId,
+    businessName: r.businessName,
+    platform: r.platform as "instagram" | "facebook",
+    scheduledDate: r.scheduledDate,
+    signalAt: r.signalAt as Date,
+    contentPreview: preview(r.content),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
@@ -196,7 +225,7 @@ export async function getAttentionData(db: Db, now: Date): Promise<AttentionData
     staleDrafts: await findStaleDrafts(db, now),
     regenLimitHits: await findRegenLimitHits(db, now),
     unseenDrafts: await findUnseenDrafts(db, now),
-    recentRejections: [],
+    recentRejections: await findRecentRejections(db, now),
     calibrationClients: [],
   }
 }
