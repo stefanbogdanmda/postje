@@ -8,6 +8,7 @@ import {
   findOverduePosts,
   findRegenLimitHits,
   findStaleDrafts,
+  findUnseenDrafts,
   getAttentionData,
 } from "../attention"
 
@@ -331,6 +332,56 @@ describe("findRegenLimitHits", () => {
     }])
 
     const items = await findRegenLimitHits(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+})
+
+describe("findUnseenDrafts", () => {
+  it("returns draft posts with firstSeenAt null", async () => {
+    await seedTestClient(db, "client-001")
+    const createdAt = new Date("2026-05-11T14:00:00Z")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Unseen by client",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({ createdAt })
+
+    const items = await findUnseenDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("unseen")
+    expect(items[0]!.signalAt).toEqual(createdAt)
+  })
+
+  it("excludes drafts the client has opened (firstSeenAt set)", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Seen",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({ firstSeenAt: new Date("2026-05-11T15:00:00Z") })
+
+    const items = await findUnseenDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes non-draft posts even if firstSeenAt is null (defensive)", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Edge case",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({ status: "approved" })
+
+    const items = await findUnseenDrafts(db, new Date("2026-05-12T10:00:00Z"))
     expect(items).toEqual([])
   })
 })

@@ -163,13 +163,39 @@ export async function findRegenLimitHits(db: Db, _now: Date): Promise<AttentionI
   }))
 }
 
+export async function findUnseenDrafts(db: Db, _now: Date): Promise<AttentionItem[]> {
+  const rows = await db
+    .select({
+      ...itemSelect,
+      signalAt: schema.posts.createdAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.clients.id, schema.posts.clientId))
+    .where(and(
+      eq(schema.posts.status, "draft"),
+      isNull(schema.posts.firstSeenAt),
+    ))
+    .orderBy(asc(schema.posts.createdAt))
+
+  return rows.map((r) => ({
+    signalType: "unseen" as const,
+    postId: r.postId,
+    clientId: r.clientId,
+    businessName: r.businessName,
+    platform: r.platform as "instagram" | "facebook",
+    scheduledDate: r.scheduledDate,
+    signalAt: r.signalAt,
+    contentPreview: preview(r.content),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
     overduePosts: await findOverduePosts(db, now),
     staleDrafts: await findStaleDrafts(db, now),
     regenLimitHits: await findRegenLimitHits(db, now),
-    unseenDrafts: [],
+    unseenDrafts: await findUnseenDrafts(db, now),
     recentRejections: [],
     calibrationClients: [],
   }
