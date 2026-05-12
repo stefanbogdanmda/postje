@@ -4,7 +4,7 @@ import DeleteUserButton from "../delete-user-button"
 
 export default async function AdminUsersPage() {
   // Auth + role gate handled by /admin/layout.tsx.
-  const allUsers = await db.select().from(users)
+  const allUsers = await db.select().from(users).limit(200)
 
   return (
     <main style={{ padding: "32px", maxWidth: "800px" }}>

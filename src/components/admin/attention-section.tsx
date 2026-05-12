@@ -15,6 +15,10 @@ const severityColor: Record<AttentionSectionProps["severity"], string> = {
   soft: "var(--admin-sev-soft)",
 }
 
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+}
+
 export default function AttentionSection({
   title,
   count,
@@ -22,9 +26,10 @@ export default function AttentionSection({
   emptyMessage,
   children,
 }: AttentionSectionProps) {
+  const headingId = `section-${slug(title)}`
   return (
     <section
-      aria-labelledby={`section-${title}`}
+      aria-labelledby={headingId}
       style={{
         borderTop: "1px solid var(--admin-border)",
         padding: "16px 0",
@@ -32,7 +37,7 @@ export default function AttentionSection({
     >
       <header style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "8px" }}>
         <h2
-          id={`section-${title}`}
+          id={headingId}
           style={{
             fontSize: "13px",
             fontWeight: 600,
