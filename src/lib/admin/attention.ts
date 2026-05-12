@@ -111,11 +111,37 @@ export async function findOverduePosts(db: Db, now: Date): Promise<AttentionItem
   }))
 }
 
+export async function findStaleDrafts(db: Db, _now: Date): Promise<AttentionItem[]> {
+  const rows = await db
+    .select({
+      ...itemSelect,
+      signalAt: schema.posts.alertedAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.clients.id, schema.posts.clientId))
+    .where(and(
+      eq(schema.posts.status, "draft"),
+      isNotNull(schema.posts.alertedAt),
+    ))
+    .orderBy(asc(schema.posts.alertedAt))
+
+  return rows.map((r) => ({
+    signalType: "stale" as const,
+    postId: r.postId,
+    clientId: r.clientId,
+    businessName: r.businessName,
+    platform: r.platform as "instagram" | "facebook",
+    scheduledDate: r.scheduledDate,
+    signalAt: r.signalAt as Date,
+    contentPreview: preview(r.content),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
     overduePosts: await findOverduePosts(db, now),
-    staleDrafts: [],
+    staleDrafts: await findStaleDrafts(db, now),
     regenLimitHits: [],
     unseenDrafts: [],
     recentRejections: [],

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import {
   findFailedPosts,
   findOverduePosts,
+  findStaleDrafts,
   getAttentionData,
 } from "../attention"
 
@@ -212,5 +213,71 @@ describe("findOverduePosts", () => {
 
     const items = await findOverduePosts(db, new Date("2026-05-12T10:00:00Z"))
     expect(items).toEqual([])
+  })
+})
+
+describe("findStaleDrafts", () => {
+  it("returns draft posts where alertedAt is set", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Stale draft",
+      reasoning: "n/a",
+    }])
+    const alertedAt = new Date("2026-05-12T05:00:00Z")
+    await db.update(posts)
+      .set({ firstSeenAt: new Date("2026-05-11T05:00:00Z"), alertedAt })
+
+    const items = await findStaleDrafts(db, new Date("2026-05-12T10:00:00Z"))
+
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("stale")
+    expect(items[0]!.signalAt).toEqual(alertedAt)
+  })
+
+  it("excludes drafts that were never alerted", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Not yet alerted",
+      reasoning: "n/a",
+    }])
+
+    const items = await findStaleDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes approved or published posts even if alertedAt was set earlier", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      content: "Now approved",
+      reasoning: "n/a",
+    }])
+    await db.update(posts)
+      .set({ status: "approved", alertedAt: new Date("2026-05-12T05:00:00Z") })
+
+    const items = await findStaleDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("sorts oldest alert first", async () => {
+    await seedTestClient(db, "client-001")
+    await seedTestClient(db, "client-002")
+    await insertPosts(db, [
+      { clientId: "client-001", platform: "instagram", scheduledDate: "2026-05-12", content: "Newer", reasoning: "n/a" },
+      { clientId: "client-002", platform: "instagram", scheduledDate: "2026-05-12", content: "Older", reasoning: "n/a" },
+    ])
+    await db.update(posts).set({ alertedAt: new Date("2026-05-12T07:00:00Z") }).where(eq(posts.clientId, "client-001"))
+    await db.update(posts).set({ alertedAt: new Date("2026-05-12T03:00:00Z") }).where(eq(posts.clientId, "client-002"))
+
+    const items = await findStaleDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items.map((i) => i.clientId)).toEqual(["client-002", "client-001"])
   })
 })
