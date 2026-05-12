@@ -1,17 +1,12 @@
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
-import {
-  users,
-  sessions,
-  accounts,
-  verificationTokens,
-  deletionAuditLog,
-} from "@/db/schema"
+import { users } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
+import { del } from "@vercel/blob"
+import { deleteUserAccount } from "@/lib/account/delete"
 
 export async function POST(request: Request) {
-  // Verify the caller is an admin
   const session = await auth()
   if (!session || session.user.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
@@ -27,9 +22,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Look up the user to get their email for the audit log
   const userRows = await db
-    .select()
+    .select({ role: users.role })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
@@ -39,7 +33,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  // Prevent deleting admin accounts through this endpoint
   if (userToDelete.role === "admin") {
     return NextResponse.json(
       { error: "Cannot delete admin accounts" },
@@ -47,21 +40,20 @@ export async function POST(request: Request) {
     )
   }
 
-  // Write the audit log entry BEFORE deleting (so we have the data)
-  await db.insert(deletionAuditLog).values({
-    deletedUserEmail: userToDelete.email,
-    deletedUserId: userToDelete.id,
-    deletedBy: session.user.id,
-  })
-
-  // Hard delete from all auth tables
-  // Order matters: delete dependent rows first to avoid foreign key issues
-  await db
-    .delete(verificationTokens)
-    .where(eq(verificationTokens.identifier, userToDelete.email))
-  await db.delete(sessions).where(eq(sessions.userId, userId))
-  await db.delete(accounts).where(eq(accounts.userId, userId))
-  await db.delete(users).where(eq(users.id, userId))
-
-  return NextResponse.json({ success: true })
+  try {
+    const result = await deleteUserAccount(
+      db,
+      userId,
+      session.user.id,
+      { deleteBlob: async (url) => { await del(url) } }
+    )
+    return NextResponse.json({ success: true, ...result })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "unknown error"
+    console.error("[admin/delete-user] Deletion failed", { userId, error: message })
+    return NextResponse.json(
+      { error: message },
+      { status: 500 }
+    )
+  }
 }
