@@ -112,6 +112,9 @@ export async function findOverduePosts(db: Db, now: Date): Promise<AttentionItem
 }
 
 export async function findStaleDrafts(db: Db, _now: Date): Promise<AttentionItem[]> {
+  // Spec: sorted by firstSeenAt ascending. Posts that have been alerted
+  // always have firstSeenAt set (alerts only fire on seen drafts), but
+  // we coalesce to alertedAt as a defensive fallback.
   const rows = await db
     .select({
       ...itemSelect,
@@ -123,7 +126,7 @@ export async function findStaleDrafts(db: Db, _now: Date): Promise<AttentionItem
       eq(schema.posts.status, "draft"),
       isNotNull(schema.posts.alertedAt),
     ))
-    .orderBy(asc(schema.posts.alertedAt))
+    .orderBy(asc(sql`coalesce(${schema.posts.firstSeenAt}, ${schema.posts.alertedAt})`))
 
   return rows.map((r) => ({
     signalType: "stale" as const,
@@ -245,15 +248,31 @@ export async function findCalibrationClients(
 }
 
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
+  const [
+    failedPosts,
+    overduePosts,
+    staleDrafts,
+    regenLimitHits,
+    unseenDrafts,
+    recentRejections,
+    calibrationClients,
+  ] = await Promise.all([
+    findFailedPosts(db, now),
+    findOverduePosts(db, now),
+    findStaleDrafts(db, now),
+    findRegenLimitHits(db, now),
+    findUnseenDrafts(db, now),
+    findRecentRejections(db, now),
+    findCalibrationClients(db, now),
+  ])
+
   return {
-    failedPosts: await findFailedPosts(db, now),
-    overduePosts: await findOverduePosts(db, now),
-    staleDrafts: await findStaleDrafts(db, now),
-    regenLimitHits: await findRegenLimitHits(db, now),
-    unseenDrafts: await findUnseenDrafts(db, now),
-    recentRejections: await findRecentRejections(db, now),
-    calibrationClients: await findCalibrationClients(db, now),
+    failedPosts,
+    overduePosts,
+    staleDrafts,
+    regenLimitHits,
+    unseenDrafts,
+    recentRejections,
+    calibrationClients,
   }
 }
-
-export const __internal = { preview }
