@@ -8,10 +8,12 @@ import {
   markPostsAsSeen,
 } from "@/lib/posts/repository"
 import { getGenerationWeekRange } from "@/lib/posts/dates"
+import { getActiveDeletionRequest } from "@/lib/account/deletion-request"
 import type { Post } from "@/lib/posts/types"
 import PendingPosts from "@/components/dashboard/pending-posts"
 import UpcomingPosts from "@/components/dashboard/upcoming-posts"
 import PublishedPosts from "@/components/dashboard/published-posts"
+import PendingDeletionBanner from "@/components/dashboard/pending-deletion-banner"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -51,8 +53,13 @@ export default async function DashboardPage() {
     await markPostsAsSeen(db, unseenPendingIds, client.id)
   }
 
+  const pendingDeletion = await getActiveDeletionRequest(db, session.user.id)
+
   return (
     <div className="space-y-10">
+      {pendingDeletion && (
+        <PendingDeletionBanner scheduledFor={pendingDeletion.scheduledFor} />
+      )}
       <PendingPosts posts={pendingPosts} />
       <UpcomingPosts posts={approvedPosts} />
       <PublishedPosts posts={publishedPosts} />
