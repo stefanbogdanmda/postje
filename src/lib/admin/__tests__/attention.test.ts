@@ -492,3 +492,53 @@ describe("findCalibrationClients", () => {
     expect(items.map((i) => i.clientId)).toEqual(["client-b", "client-a"])
   })
 })
+
+describe("getAttentionData (integration)", () => {
+  it("partitions a realistic mix of signals into the right sections", async () => {
+    const now = new Date("2026-05-12T10:00:00Z")
+
+    // Client A — older client with mixed problems.
+    await seedTestClient(db, "client-a")
+    await db.update(clientsTable)
+      .set({ createdAt: new Date("2026-04-01T10:00:00Z") })
+      .where(eq(clientsTable.id, "client-a"))
+
+    // Client B — calibration (joined 2 days ago, 0 posts).
+    await seedTestClient(db, "client-b")
+    await db.update(clientsTable)
+      .set({ createdAt: new Date("2026-05-10T10:00:00Z") })
+      .where(eq(clientsTable.id, "client-b"))
+
+    await insertPosts(db, [
+      { clientId: "client-a", platform: "instagram", scheduledDate: "2026-05-10", content: "stale draft", reasoning: "n/a" },
+      { clientId: "client-a", platform: "facebook",  scheduledDate: "2026-05-08", content: "rejected last week", reasoning: "n/a" },
+      { clientId: "client-a", platform: "instagram", scheduledDate: "2026-05-11", content: "approved but overdue", reasoning: "n/a" },
+    ])
+    const rows = await db.select().from(posts).where(eq(posts.clientId, "client-a"))
+    const byContent = (s: string) => rows.find((p) => p.content === s)!.id
+
+    await db.update(posts)
+      .set({ alertedAt: new Date("2026-05-12T05:00:00Z"), firstSeenAt: new Date("2026-05-11T05:00:00Z") })
+      .where(eq(posts.id, byContent("stale draft")))
+    await db.update(posts)
+      .set({ status: "rejected", rejectedAt: new Date("2026-05-09T10:00:00Z") })
+      .where(eq(posts.id, byContent("rejected last week")))
+    await db.update(posts)
+      .set({
+        status: "approved",
+        approvedAt: new Date("2026-05-10T10:00:00Z"),
+        publishAt: new Date("2026-05-11T09:00:00Z"),
+      })
+      .where(eq(posts.id, byContent("approved but overdue")))
+
+    const data = await getAttentionData(db, now)
+
+    expect(data.staleDrafts.map((i) => i.postId)).toEqual([byContent("stale draft")])
+    expect(data.recentRejections.map((i) => i.postId)).toEqual([byContent("rejected last week")])
+    expect(data.overduePosts.map((i) => i.postId)).toEqual([byContent("approved but overdue")])
+    expect(data.calibrationClients.map((i) => i.clientId)).toEqual(["client-b"])
+    expect(data.failedPosts).toEqual([])
+    expect(data.regenLimitHits).toEqual([])
+    expect(data.unseenDrafts).toEqual([])
+  })
+})
