@@ -84,10 +84,37 @@ export async function findFailedPosts(db: Db, _now: Date): Promise<AttentionItem
   }))
 }
 
+export async function findOverduePosts(db: Db, now: Date): Promise<AttentionItem[]> {
+  const rows = await db
+    .select({
+      ...itemSelect,
+      signalAt: schema.posts.publishAt,
+    })
+    .from(schema.posts)
+    .innerJoin(schema.clients, eq(schema.clients.id, schema.posts.clientId))
+    .where(and(
+      eq(schema.posts.status, "approved"),
+      isNull(schema.posts.publishedAt),
+      sql`${schema.posts.publishAt} < ${now}`,
+    ))
+    .orderBy(asc(schema.posts.publishAt))
+
+  return rows.map((r) => ({
+    signalType: "overdue" as const,
+    postId: r.postId,
+    clientId: r.clientId,
+    businessName: r.businessName,
+    platform: r.platform as "instagram" | "facebook",
+    scheduledDate: r.scheduledDate,
+    signalAt: r.signalAt as Date,
+    contentPreview: preview(r.content),
+  }))
+}
+
 export async function getAttentionData(db: Db, now: Date): Promise<AttentionData> {
   return {
     failedPosts: await findFailedPosts(db, now),
-    overduePosts: [],
+    overduePosts: await findOverduePosts(db, now),
     staleDrafts: [],
     regenLimitHits: [],
     unseenDrafts: [],
