@@ -3,7 +3,11 @@ import { createTestDb, seedTestClient, type TestDb } from "@/test/db"
 import { posts } from "@/db/schema"
 import { insertPosts } from "@/lib/posts/repository"
 import { eq } from "drizzle-orm"
-import { findFailedPosts, getAttentionData } from "../attention"
+import {
+  findFailedPosts,
+  findOverduePosts,
+  getAttentionData,
+} from "../attention"
 
 let db: TestDb
 
@@ -134,5 +138,79 @@ describe("findFailedPosts", () => {
     const items = await findFailedPosts(db, new Date("2026-05-12T10:00:00Z"))
 
     expect(items.map((i) => i.clientId)).toEqual(["client-002", "client-001"])
+  })
+})
+
+describe("findOverduePosts", () => {
+  it("returns approved posts whose publishAt is in the past and not yet published", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-10",
+      content: "Overdue post",
+      reasoning: "n/a",
+    }])
+    const publishAt = new Date("2026-05-10T09:00:00Z")
+    await db.update(posts)
+      .set({ status: "approved", publishAt, approvedAt: new Date("2026-05-09T10:00:00Z") })
+
+    const items = await findOverduePosts(db, new Date("2026-05-12T10:00:00Z"))
+
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("overdue")
+    expect(items[0]!.signalAt).toEqual(publishAt)
+  })
+
+  it("excludes approved posts scheduled for the future", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-20",
+      content: "Future approved",
+      reasoning: "n/a",
+    }])
+    await db.update(posts)
+      .set({ status: "approved", publishAt: new Date("2026-05-20T09:00:00Z") })
+
+    const items = await findOverduePosts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes published posts even if publishAt is in the past", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-10",
+      content: "Published",
+      reasoning: "n/a",
+    }])
+    await db.update(posts)
+      .set({
+        status: "published",
+        publishAt: new Date("2026-05-10T09:00:00Z"),
+        publishedAt: new Date("2026-05-10T09:01:00Z"),
+      })
+
+    const items = await findOverduePosts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes drafts (only approved counts)", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-10",
+      content: "Draft past publishAt",
+      reasoning: "n/a",
+    }])
+    await db.update(posts)
+      .set({ publishAt: new Date("2026-05-10T09:00:00Z") })
+
+    const items = await findOverduePosts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
   })
 })
