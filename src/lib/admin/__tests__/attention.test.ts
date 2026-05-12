@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import {
   findFailedPosts,
   findOverduePosts,
+  findRecentRejections,
   findRegenLimitHits,
   findStaleDrafts,
   findUnseenDrafts,
@@ -382,6 +383,62 @@ describe("findUnseenDrafts", () => {
     await db.update(posts).set({ status: "approved" })
 
     const items = await findUnseenDrafts(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+})
+
+describe("findRecentRejections", () => {
+  it("returns posts rejected within the last 7 days", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-08",
+      content: "Recently rejected",
+      reasoning: "n/a",
+    }])
+    const rejectedAt = new Date("2026-05-10T10:00:00Z")
+    await db.update(posts).set({ status: "rejected", rejectedAt })
+
+    const items = await findRecentRejections(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toHaveLength(1)
+    expect(items[0]!.signalType).toBe("rejected")
+    expect(items[0]!.signalAt).toEqual(rejectedAt)
+  })
+
+  it("excludes rejections older than 7 days", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-04-30",
+      content: "Old rejection",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({
+      status: "rejected",
+      rejectedAt: new Date("2026-05-04T10:00:00Z"),
+    })
+
+    const items = await findRecentRejections(db, new Date("2026-05-12T10:00:00Z"))
+    expect(items).toEqual([])
+  })
+
+  it("excludes posts that are not in rejected status", async () => {
+    await seedTestClient(db, "client-001")
+    await insertPosts(db, [{
+      clientId: "client-001",
+      platform: "instagram",
+      scheduledDate: "2026-05-10",
+      content: "Draft with stale rejectedAt timestamp from prior cycle",
+      reasoning: "n/a",
+    }])
+    await db.update(posts).set({
+      status: "draft",
+      rejectedAt: new Date("2026-05-10T10:00:00Z"),
+    })
+
+    const items = await findRecentRejections(db, new Date("2026-05-12T10:00:00Z"))
     expect(items).toEqual([])
   })
 })
