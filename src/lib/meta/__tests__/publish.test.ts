@@ -227,3 +227,126 @@ describe("publishPostToMeta — Facebook path", () => {
     }
   })
 })
+
+describe("publishPostToMeta — Instagram path", () => {
+  it("performs the two-step container + publish flow", async () => {
+    await seedTestPhoto(db, CLIENT_ID, "photo-ig-1")
+    await seedApprovedPost({
+      id: "post-ig-1",
+      platform: "instagram",
+      photoId: "photo-ig-1",
+    })
+
+    const calls: string[] = []
+    const fetcher: Fetcher = async (url) => {
+      calls.push(url)
+      if (url.includes("/media_publish")) {
+        return jsonResponse(200, { id: "IG_FINAL_999" })
+      }
+      if (url.includes("/media")) {
+        return jsonResponse(200, { id: "CONTAINER_123" })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    }
+
+    const result = await publishPostToMeta(
+      db,
+      "post-ig-1",
+      { fetcher, now: new Date() },
+      "user-admin"
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.metaPostId).toBe("IG_FINAL_999")
+    }
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toContain("/IG_1/media")
+    expect(calls[0]).not.toContain("media_publish")
+    expect(calls[1]).toContain("/IG_1/media_publish")
+  })
+
+  it("fails fast when the post has no photo", async () => {
+    await seedApprovedPost({ id: "post-ig-2", platform: "instagram" })
+
+    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
+    const result = await publishPostToMeta(
+      db,
+      "post-ig-2",
+      { fetcher, now: new Date() },
+      "user-admin"
+    )
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorClass).toBe("precondition")
+      expect(result.errorMessage).toMatch(/require.*photo/i)
+    }
+    const [post] = await db
+      .select()
+      .from(schema.posts)
+      .where(eq(schema.posts.id, "post-ig-2"))
+    expect(post.status).toBe("approved")
+  })
+
+  it("fails fast when the connection has no instagramBusinessId", async () => {
+    await db.delete(schema.metaConnections).where(eq(schema.metaConnections.clientId, CLIENT_ID))
+    await upsertConnection(db, {
+      clientId: CLIENT_ID,
+      pageId: "PAGE_1",
+      pageName: "Café Test",
+      instagramBusinessId: null,
+      encryptedAccessToken: encryptToken("test-token"),
+      grantedScopes: "pages_manage_posts",
+    })
+    await seedTestPhoto(db, CLIENT_ID, "photo-ig-3")
+    await seedApprovedPost({
+      id: "post-ig-3",
+      platform: "instagram",
+      photoId: "photo-ig-3",
+    })
+
+    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
+    const result = await publishPostToMeta(
+      db,
+      "post-ig-3",
+      { fetcher, now: new Date() },
+      "user-admin"
+    )
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorMessage).toMatch(/instagram/i)
+    }
+  })
+
+  it("classifies a container-step failure correctly", async () => {
+    await seedTestPhoto(db, CLIENT_ID, "photo-ig-4")
+    await seedApprovedPost({
+      id: "post-ig-4",
+      platform: "instagram",
+      photoId: "photo-ig-4",
+    })
+
+    const fetcher: Fetcher = async (url) => {
+      if (url.includes("/media") && !url.includes("publish")) {
+        return jsonResponse(400, {
+          error: { code: 9004, message: "Image fetch failed" },
+        })
+      }
+      return jsonResponse(200, { id: "should-not-reach" })
+    }
+
+    const result = await publishPostToMeta(
+      db,
+      "post-ig-4",
+      { fetcher, now: new Date() },
+      "user-admin"
+    )
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorClass).toBe("content-rejected")
+    }
+  })
+})
