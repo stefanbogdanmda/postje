@@ -79,6 +79,17 @@ export default async function AdminPage() {
         >
           Generate posts preview →
         </Link>
+        <Link
+          href="/admin/queue"
+          style={{
+            color: "#1a1a1a",
+            textDecoration: "underline",
+            fontSize: "14px",
+            marginLeft: "16px",
+          }}
+        >
+          Publication queue →
+        </Link>
       </div>
     </main>
   )
