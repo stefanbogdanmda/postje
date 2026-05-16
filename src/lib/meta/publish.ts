@@ -101,7 +101,115 @@ export async function publishPostToMeta(
   if (post.platform === "facebook") {
     return await publishFacebook(db, post, connection, deps, attemptedBy)
   }
-  return preconditionError(`Platform ${post.platform} not yet implemented`)
+  if (post.platform === "instagram") {
+    return await publishInstagram(db, post, connection, deps, attemptedBy)
+  }
+  return preconditionError(`Platform ${post.platform} not supported`)
+}
+
+async function publishInstagram(
+  db: Db,
+  post: PostWithPhoto,
+  connection: DecryptedConnection,
+  deps: PublishDeps,
+  attemptedBy: string
+): Promise<PublishResult> {
+  if (!post.photoUrl) {
+    return preconditionError("Instagram posts require a photo")
+  }
+  if (!connection.instagramBusinessId) {
+    return preconditionError("Client's Meta connection has no Instagram account")
+  }
+
+  const base = getGraphBaseUrl()
+  const igId = connection.instagramBusinessId
+  const totalStartedAt = Date.now()
+
+  const containerParams = new URLSearchParams({
+    access_token: connection.accessToken,
+    image_url: post.photoUrl,
+    caption: post.content,
+  })
+  const containerResponse = await metaFetch(
+    `${base}/${igId}/media`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: containerParams.toString(),
+    },
+    deps.fetcher
+  )
+
+  if (!containerResponse.ok) {
+    const classified = classifyMetaError({
+      httpStatus: containerResponse.httpStatus,
+      body: containerResponse.body,
+    })
+    return await recordFailure(
+      db,
+      post.id,
+      attemptedBy,
+      Date.now() - totalStartedAt,
+      classified
+    )
+  }
+
+  const containerBody = containerResponse.body as { id?: string }
+  const containerId = containerBody?.id
+  if (!containerId) {
+    return await recordFailure(db, post.id, attemptedBy, Date.now() - totalStartedAt, {
+      class: "content-rejected",
+      code: null,
+      message: "Instagram container step returned 2xx with no id",
+    })
+  }
+
+  const publishParams = new URLSearchParams({
+    access_token: connection.accessToken,
+    creation_id: containerId,
+  })
+  const publishResponse = await metaFetch(
+    `${base}/${igId}/media_publish`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: publishParams.toString(),
+    },
+    deps.fetcher
+  )
+
+  if (!publishResponse.ok) {
+    const classified = classifyMetaError({
+      httpStatus: publishResponse.httpStatus,
+      body: publishResponse.body,
+    })
+    return await recordFailure(
+      db,
+      post.id,
+      attemptedBy,
+      Date.now() - totalStartedAt,
+      classified
+    )
+  }
+
+  const publishBody = publishResponse.body as { id?: string }
+  const metaPostId = publishBody?.id
+  if (!metaPostId) {
+    return await recordFailure(db, post.id, attemptedBy, Date.now() - totalStartedAt, {
+      class: "content-rejected",
+      code: null,
+      message: "Instagram publish step returned 2xx with no id",
+    })
+  }
+
+  return await recordSuccess(
+    db,
+    post.id,
+    attemptedBy,
+    Date.now() - totalStartedAt,
+    metaPostId,
+    deps.now
+  )
 }
 
 async function publishFacebook(
