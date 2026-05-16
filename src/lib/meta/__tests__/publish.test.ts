@@ -350,3 +350,27 @@ describe("publishPostToMeta — Instagram path", () => {
     }
   })
 })
+
+describe("publishPostToMeta — status guard", () => {
+  it("does not flip status when post is already published (race)", async () => {
+    await seedApprovedPost({ id: "post-race", platform: "facebook" })
+    await db
+      .update(schema.posts)
+      .set({ status: "published", publishedAt: new Date() })
+      .where(eq(schema.posts.id, "post-race"))
+
+    const fetcher: Fetcher = async () => jsonResponse(200, { id: "META_X" })
+    const result = await publishPostToMeta(
+      db,
+      "post-race",
+      { fetcher, now: new Date() },
+      "user-admin"
+    )
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorClass).toBe("precondition")
+      expect(result.errorMessage).toMatch(/not approved/i)
+    }
+  })
+})
