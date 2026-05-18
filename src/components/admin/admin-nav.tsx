@@ -4,6 +4,7 @@ import SignOutButton from "@/components/sign-out-button"
 const links = [
   { href: "/admin", label: "Attention" },
   { href: "/admin/clients", label: "Clients" },
+  { href: "/admin/queue", label: "Queue" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/generate-preview", label: "Generate" },
 ]
