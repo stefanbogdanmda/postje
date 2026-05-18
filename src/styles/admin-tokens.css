@@ -1,0 +1,32 @@
+/*
+ * Operator-console palette for /admin/*.
+ * Sober, dense, near-white. Severity colors are traffic-light only —
+ * everything else is grayscale.
+ */
+
+.admin-shell {
+  --admin-bg: #fafafa;
+  --admin-surface: #ffffff;
+  --admin-border: #e5e5e5;
+  --admin-border-strong: #d4d4d4;
+
+  --admin-text: #1a1a1a;
+  --admin-text-muted: #525252;
+  --admin-text-subtle: #737373;
+
+  --admin-accent: #0a0a0a;
+
+  /* Severity */
+  --admin-sev-critical: #b91c1c; /* red — failed, overdue */
+  --admin-sev-warn: #b45309;     /* amber — stale, regen-limit */
+  --admin-sev-info: #404040;     /* dark gray — unseen, rejected */
+  --admin-sev-soft: #737373;     /* gray — calibration */
+
+  background-color: var(--admin-bg);
+  color: var(--admin-text);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+.admin-shell .admin-mono {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
