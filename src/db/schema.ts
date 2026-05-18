@@ -247,3 +247,66 @@ export const deletionAuditLog = pgTable("deletion_audit_log", {
     .notNull()
     .$defaultFn(() => new Date()),
 })
+
+// ──────────────────────────────────────────────
+// metaConnections — encrypted Meta page-access-token storage.
+// One active row per client per page. The encrypted token is decoded
+// only inside the publisher; nothing else reads it.
+// ──────────────────────────────────────────────
+export const metaConnections = pgTable(
+  "meta_connections",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    clientId: text("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    pageId: text("pageId").notNull(),
+    pageName: text("pageName").notNull(),
+    instagramBusinessId: text("instagramBusinessId"),
+    encryptedAccessToken: text("encryptedAccessToken").notNull(),
+    grantedScopes: text("grantedScopes").notNull(),
+    connectedAt: timestamp("connectedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastValidatedAt: timestamp("lastValidatedAt", { withTimezone: true, mode: "date" }),
+    expiresAt: timestamp("expiresAt", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    uniqueIndex("meta_connections_client_page_idx").on(t.clientId, t.pageId),
+  ]
+)
+
+// ──────────────────────────────────────────────
+// publishAttempts — audit trail for every Meta API publish attempt.
+// One row per attempt. The `success` flag plus error fields tell us
+// what happened; the most-recent error is also denormalized onto
+// posts.publishError for the Attention List.
+// ──────────────────────────────────────────────
+export const publishAttempts = pgTable(
+  "publish_attempts",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    postId: text("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    attemptedAt: timestamp("attemptedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    attemptedBy: text("attemptedBy").notNull(),
+    metaPostId: text("metaPostId"),
+    success: boolean("success").notNull(),
+    errorClass: text("errorClass", {
+      enum: ["transient", "token-expired", "content-rejected"],
+    }),
+    errorCode: text("errorCode"),
+    errorMessage: text("errorMessage"),
+    requestDurationMs: integer("requestDurationMs"),
+  },
+  (t) => [index("publish_attempts_post_idx").on(t.postId)]
+)
