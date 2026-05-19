@@ -1,3 +1,9 @@
+import { eq, and } from "drizzle-orm"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
+import * as schema from "@/db/schema"
+import { decryptToken } from "./crypto"
+import { classifyMetaError, type ErrorClass } from "./errors"
 import { getGraphBaseUrl } from "./config"
 import { MetaApiError, readJsonOrThrow, type Fetcher } from "./client"
 
@@ -102,4 +108,144 @@ export async function publishToInstagram(
     throw new MetaApiError("Instagram publish response missing id", 200)
   }
   return publishJson.id
+}
+
+// ─────────────────────────────────────────────────────────
+// Orchestrator — the ONLY function external code should call
+// ─────────────────────────────────────────────────────────
+
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
+
+export type GuardFailure = "not-approved" | "no-connection" | "ig-no-photo"
+
+export interface PublishResult {
+  success: boolean
+  metaPostId?: string
+  guardFailure?: GuardFailure
+  errorClass?: ErrorClass
+  errorMessage?: string
+}
+
+async function loadJoinedRow(db: Db, postId: string) {
+  const rows = await db
+    .select({
+      postId: schema.posts.id,
+      status: schema.posts.status,
+      platform: schema.posts.platform,
+      content: schema.posts.content,
+      photoUrl: schema.photos.blobUrl,
+      pageId: schema.metaConnections.pageId,
+      igUserId: schema.metaConnections.instagramBusinessId,
+      encryptedAccessToken: schema.metaConnections.encryptedAccessToken,
+    })
+    .from(schema.posts)
+    .leftJoin(schema.photos, eq(schema.posts.photoId, schema.photos.id))
+    .leftJoin(
+      schema.metaConnections,
+      eq(schema.metaConnections.clientId, schema.posts.clientId)
+    )
+    .where(eq(schema.posts.id, postId))
+    .limit(1)
+  return rows[0] ?? null
+}
+
+export async function publishPostToMeta(
+  db: Db,
+  postId: string,
+  attemptedBy: string,
+  fetcher: Fetcher = globalThis.fetch
+): Promise<PublishResult> {
+  const row = await loadJoinedRow(db, postId)
+  if (!row) {
+    return { success: false, guardFailure: "not-approved" }
+  }
+  if (row.status !== "approved") {
+    return { success: false, guardFailure: "not-approved" }
+  }
+  if (!row.encryptedAccessToken || !row.pageId) {
+    return { success: false, guardFailure: "no-connection" }
+  }
+  if (row.platform === "instagram" && !row.photoUrl) {
+    return { success: false, guardFailure: "ig-no-photo" }
+  }
+
+  const accessToken = decryptToken(row.encryptedAccessToken)
+  const start = Date.now()
+
+  try {
+    let metaPostId: string
+    if (row.platform === "facebook") {
+      metaPostId = await publishToFacebook(
+        { pageId: row.pageId, accessToken },
+        { content: row.content, photoUrl: row.photoUrl },
+        fetcher
+      )
+    } else {
+      if (!row.igUserId) {
+        return { success: false, guardFailure: "no-connection" }
+      }
+      metaPostId = await publishToInstagram(
+        { igUserId: row.igUserId, accessToken },
+        { content: row.content, photoUrl: row.photoUrl },
+        fetcher
+      )
+    }
+    const duration = Date.now() - start
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.posts)
+        .set({
+          status: "published",
+          publishedAt: new Date(),
+          publishError: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "approved")))
+      await tx.insert(schema.publishAttempts).values({
+        postId,
+        attemptedBy,
+        metaPostId,
+        success: true,
+        requestDurationMs: duration,
+      })
+    })
+
+    return { success: true, metaPostId }
+  } catch (error: unknown) {
+    const duration = Date.now() - start
+    const isMeta = error instanceof MetaApiError
+    const message =
+      error instanceof Error ? error.message : "Onbekende publish-fout"
+    const errorClass: ErrorClass = isMeta
+      ? classifyMetaError(error.code, error.subcode, error.status)
+      : "unknown"
+    const errorCode = isMeta && error.code !== undefined ? String(error.code) : null
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.posts)
+        .set({
+          status: "failed",
+          publishError: message,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "approved")))
+      await tx.insert(schema.publishAttempts).values({
+        postId,
+        attemptedBy,
+        success: false,
+        errorClass,
+        errorCode,
+        errorMessage: message,
+        requestDurationMs: duration,
+      })
+    })
+
+    return { success: false, errorClass, errorMessage: message }
+  }
 }
