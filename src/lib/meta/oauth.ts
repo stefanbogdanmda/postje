@@ -1,6 +1,8 @@
 import { getGraphBaseUrl, getOAuthDialogUrl, META_OAUTH_SCOPES } from "./config"
+import { MetaApiError, readJsonOrThrow, type Fetcher } from "./client"
 
-export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>
+export type { Fetcher }
+export { MetaApiError }
 
 function requireEnv(name: string): string {
   const v = process.env[name]
@@ -24,41 +26,6 @@ export function buildAuthUrl(state: string): string {
     scope: META_OAUTH_SCOPES.join(","),
   })
   return `${getOAuthDialogUrl()}?${params.toString()}`
-}
-
-export class MetaApiError extends Error {
-  readonly code: number | undefined
-  readonly subcode: number | undefined
-  readonly status: number
-  constructor(message: string, status: number, code?: number, subcode?: number) {
-    super(message)
-    this.name = "MetaApiError"
-    this.code = code
-    this.subcode = subcode
-    this.status = status
-  }
-}
-
-async function readJsonOrThrow(res: Response): Promise<unknown> {
-  let body: unknown
-  try {
-    body = await res.json()
-  } catch {
-    throw new MetaApiError(
-      `Graph API returned non-JSON (status ${res.status})`,
-      res.status
-    )
-  }
-  if (!res.ok) {
-    const err = (body as { error?: { message?: string; code?: number; error_subcode?: number } })?.error
-    throw new MetaApiError(
-      err?.message ?? `Graph API error (status ${res.status})`,
-      res.status,
-      err?.code,
-      err?.error_subcode
-    )
-  }
-  return body
 }
 
 /**
