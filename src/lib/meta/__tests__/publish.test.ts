@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { publishToFacebook } from "../publish"
+import { publishToFacebook, publishToInstagram } from "../publish"
 
 beforeEach(() => {
   process.env.META_GRAPH_VERSION = "v21.0"
@@ -61,5 +61,64 @@ describe("publishToFacebook — without photo", () => {
       fetcher
     )
     expect(id).toBe("FEED_ID")
+  })
+})
+
+describe("publishToInstagram", () => {
+  it("creates a media container then publishes it and returns the final id", async () => {
+    let step = 0
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      step++
+      const body = init?.body as URLSearchParams
+      if (step === 1) {
+        expect(url).toBe("https://graph.facebook.com/v21.0/IG_1/media")
+        expect(body.get("image_url")).toBe("https://example.com/p.jpg")
+        expect(body.get("caption")).toBe("Hello IG")
+        expect(body.get("access_token")).toBe("PAGE_TOKEN")
+        return jsonResponse({ id: "CONTAINER_123" })
+      }
+      if (step === 2) {
+        expect(url).toBe("https://graph.facebook.com/v21.0/IG_1/media_publish")
+        expect(body.get("creation_id")).toBe("CONTAINER_123")
+        expect(body.get("access_token")).toBe("PAGE_TOKEN")
+        return jsonResponse({ id: "IG_MEDIA_FINAL" })
+      }
+      throw new Error("unexpected extra fetch")
+    })
+    const id = await publishToInstagram(
+      { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+      { content: "Hello IG", photoUrl: "https://example.com/p.jpg" },
+      fetcher
+    )
+    expect(id).toBe("IG_MEDIA_FINAL")
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it("throws a no-photo error without calling Meta when photoUrl is null", async () => {
+    const fetcher = vi.fn()
+    await expect(
+      publishToInstagram(
+        { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+        { content: "no image", photoUrl: null },
+        fetcher
+      )
+    ).rejects.toThrow(/photo/i)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it("propagates a container-step failure without calling step 2", async () => {
+    let step = 0
+    const fetcher = vi.fn(async () => {
+      step++
+      return jsonResponse({ error: { message: "image fetch failed", code: 324 } }, 400)
+    })
+    await expect(
+      publishToInstagram(
+        { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+        { content: "x", photoUrl: "https://example.com/p.jpg" },
+        fetcher
+      )
+    ).rejects.toThrow(/image fetch failed/)
+    expect(step).toBe(1)
   })
 })

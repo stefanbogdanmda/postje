@@ -1,5 +1,5 @@
 import { getGraphBaseUrl } from "./config"
-import { readJsonOrThrow, type Fetcher } from "./client"
+import { MetaApiError, readJsonOrThrow, type Fetcher } from "./client"
 
 export interface PageCredentials {
   pageId: string
@@ -47,4 +47,59 @@ export async function publishToFacebook(
   }
 
   return metaPostId
+}
+
+export interface InstagramCredentials {
+  igUserId: string
+  accessToken: string
+}
+
+/**
+ * Publish to Instagram. Two-step: create a media container, then publish it.
+ * Throws MetaApiError if photoUrl is null (IG has no text-only path) or
+ * if either Meta call fails.
+ */
+export async function publishToInstagram(
+  creds: InstagramCredentials,
+  payload: PostPayload,
+  fetcher: Fetcher = globalThis.fetch
+): Promise<string> {
+  if (!payload.photoUrl) {
+    throw new MetaApiError(
+      "Instagram posts require a photo; this post has none",
+      400
+    )
+  }
+  const baseUrl = getGraphBaseUrl()
+
+  // Step 1: create container
+  const containerBody = new URLSearchParams({
+    image_url: payload.photoUrl,
+    caption: payload.content,
+    access_token: creds.accessToken,
+  })
+  const containerRes = await fetcher(`${baseUrl}/${creds.igUserId}/media`, {
+    method: "POST",
+    body: containerBody,
+  })
+  const containerJson = (await readJsonOrThrow(containerRes)) as { id?: string }
+  const containerId = containerJson.id
+  if (!containerId) {
+    throw new MetaApiError("Instagram container response missing id", 200)
+  }
+
+  // Step 2: publish container
+  const publishBody = new URLSearchParams({
+    creation_id: containerId,
+    access_token: creds.accessToken,
+  })
+  const publishRes = await fetcher(`${baseUrl}/${creds.igUserId}/media_publish`, {
+    method: "POST",
+    body: publishBody,
+  })
+  const publishJson = (await readJsonOrThrow(publishRes)) as { id?: string }
+  if (!publishJson.id) {
+    throw new MetaApiError("Instagram publish response missing id", 200)
+  }
+  return publishJson.id
 }
