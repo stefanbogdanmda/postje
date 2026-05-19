@@ -1,4 +1,5 @@
 import type { Post } from "@/lib/posts/types"
+import CancelButton from "./cancel-button"
 
 interface UpcomingPostsProps {
   posts: Post[]
@@ -31,9 +32,13 @@ function groupByDate(posts: Post[]): Map<string, Post[]> {
   )
 }
 
+function getPlatformLabel(platform: string): string {
+  return platform === "instagram" ? "IG" : "FB"
+}
+
 function getPlatformPills(posts: Post[]): string[] {
   const platforms = new Set(
-    posts.map((p) => (p.platform === "instagram" ? "IG" : "FB"))
+    posts.map((p) => getPlatformLabel(p.platform))
   )
   return [...platforms].sort()
 }
@@ -64,7 +69,7 @@ export default function UpcomingPosts({ posts }: UpcomingPostsProps) {
         {[...grouped.entries()].map(([date, dayPosts]) => (
           <div
             key={date}
-            className="bg-[var(--approved-bg)] border border-[var(--approved-border)] rounded-lg px-3.5 py-2.5 min-w-[120px] flex-shrink-0"
+            className="bg-[var(--approved-bg)] border border-[var(--approved-border)] rounded-lg px-3.5 py-2.5 min-w-[140px] flex-shrink-0"
           >
             <p className="text-sm font-semibold text-[var(--approved-text)]">
               {formatDutchDate(date)}
@@ -80,6 +85,16 @@ export default function UpcomingPosts({ posts }: UpcomingPostsProps) {
                 >
                   {pill}
                 </span>
+              ))}
+            </div>
+            <div className="flex flex-col gap-1 mt-2">
+              {dayPosts.map((post) => (
+                <div key={post.id} className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {getPlatformLabel(post.platform)}
+                  </span>
+                  <CancelButton postId={post.id} />
+                </div>
               ))}
             </div>
           </div>
