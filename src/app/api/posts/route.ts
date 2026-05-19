@@ -3,6 +3,7 @@ import { db } from "@/db"
 import { getPostsByDateRange } from "@/lib/posts/repository"
 import type { PostsByDay } from "@/lib/posts/types"
 import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 /** Maximum date range in days to prevent unbounded queries. */
 const MAX_RANGE_DAYS = 31
@@ -10,6 +11,9 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export async function GET(request: NextRequest) {
   try {
+    const rateLimited = await rateLimitRequest(request, "posts", 30, 60_000)
+    if (rateLimited) return rateLimited
+
     const searchParams = request.nextUrl.searchParams
     const requestedClientId = searchParams.get("clientId")
     const startDate = searchParams.get("startDate")

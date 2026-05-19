@@ -25,6 +25,11 @@ export async function regenerateSinglePost(
       industry: clients.industry,
       businessType: clients.businessType,
       productsServices: clients.productsServices,
+      toneOfVoice: clients.toneOfVoice,
+      targetCustomers: clients.targetCustomers,
+      brandPersonality: clients.brandPersonality,
+      bannedPhrases: clients.bannedPhrases,
+      examplePosts: clients.examplePosts,
     })
     .from(clients)
     .where(eq(clients.id, clientId))

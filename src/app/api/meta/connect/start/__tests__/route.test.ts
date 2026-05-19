@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { NextRequest } from "next/server"
 
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn(),
@@ -8,6 +9,10 @@ vi.mock("@/db", () => ({
   db: {
     select: vi.fn(),
   },
+}))
+
+vi.mock("@/lib/request-rate-limit", () => ({
+  rateLimitRequest: vi.fn().mockResolvedValue(null),
 }))
 
 import { GET } from "../route"
@@ -27,7 +32,7 @@ beforeEach(() => {
 function reqWith(clientId: string | null) {
   const u = new URL("http://localhost/api/meta/connect/start")
   if (clientId !== null) u.searchParams.set("clientId", clientId)
-  return new Request(u)
+  return new NextRequest(u)
 }
 
 function adminSession() {

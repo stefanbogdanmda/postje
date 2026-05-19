@@ -4,8 +4,8 @@ import { checkStalePosts } from "@/lib/alerts/check-stale-posts"
 import { sendStalePostEmail } from "@/lib/alerts/stale-post-email"
 import { checkRegenLimits } from "@/lib/alerts/check-regen-limits"
 import { sendRegenLimitEmail } from "@/lib/alerts/regen-limit-email"
+import { verifyCronSecret } from "@/lib/cron-auth"
 
-const CRON_SECRET = process.env.CRON_SECRET
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
 interface PassResult {
@@ -38,14 +38,8 @@ async function runPass<T extends PassResult>(
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization")
 
-  if (!CRON_SECRET) {
-    console.error("[cron] CRON_SECRET not configured — refusing to run")
-    return new NextResponse(null, { status: 500 })
-  }
-
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
-    return new NextResponse(null, { status: 401 })
-  }
+  const cronAuth = verifyCronSecret(authHeader)
+  if (!cronAuth.ok) return cronAuth.response
 
   const now = new Date()
 

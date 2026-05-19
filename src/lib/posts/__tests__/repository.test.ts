@@ -17,6 +17,7 @@ import {
   markPostAlerted,
   findPostsAtRegenLimit,
   markPostRegenLimitAlerted,
+  buildPublishAt,
 } from "../repository"
 import type { Platform, PostStatus } from "../config"
 
@@ -739,5 +740,43 @@ describe("markPostRegenLimitAlerted", () => {
     const now = new Date("2026-05-13T10:00:00Z")
     // Should not throw
     await expect(markPostRegenLimitAlerted(db, "nonexistent-id", now)).resolves.not.toThrow()
+  })
+})
+
+describe("buildPublishAt", () => {
+  it("constructs a date in the given timezone, not UTC", () => {
+    // 08:00 Amsterdam on 2026-06-15 = 06:00 UTC (CEST = UTC+2)
+    const result = buildPublishAt("2026-06-15", "08:00", "Europe/Amsterdam")
+    expect(result.toISOString()).toBe("2026-06-15T06:00:00.000Z")
+  })
+
+  it("handles winter time correctly (CET = UTC+1)", () => {
+    // 08:00 Amsterdam on 2026-01-15 = 07:00 UTC (CET = UTC+1)
+    const result = buildPublishAt("2026-01-15", "08:00", "Europe/Amsterdam")
+    expect(result.toISOString()).toBe("2026-01-15T07:00:00.000Z")
+  })
+
+  it("defaults to Europe/Amsterdam when timezone is empty", () => {
+    // Should still interpret as Amsterdam, not UTC
+    const result = buildPublishAt("2026-06-15", "08:00", "")
+    expect(result.toISOString()).toBe("2026-06-15T06:00:00.000Z")
+  })
+
+  it("works for a non-European timezone", () => {
+    // 08:00 New York on 2026-06-15 = 12:00 UTC (EDT = UTC-4)
+    const result = buildPublishAt("2026-06-15", "08:00", "America/New_York")
+    expect(result.toISOString()).toBe("2026-06-15T12:00:00.000Z")
+  })
+
+  it("handles midnight correctly", () => {
+    // 00:00 Amsterdam on 2026-06-15 = 22:00 UTC on 2026-06-14 (CEST = UTC+2)
+    const result = buildPublishAt("2026-06-15", "00:00", "Europe/Amsterdam")
+    expect(result.toISOString()).toBe("2026-06-14T22:00:00.000Z")
+  })
+
+  it("handles times with minutes", () => {
+    // 14:30 Amsterdam on 2026-06-15 = 12:30 UTC (CEST = UTC+2)
+    const result = buildPublishAt("2026-06-15", "14:30", "Europe/Amsterdam")
+    expect(result.toISOString()).toBe("2026-06-15T12:30:00.000Z")
   })
 })

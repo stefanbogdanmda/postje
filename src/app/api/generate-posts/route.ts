@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
 import { clients, photos } from "@/db/schema"
@@ -25,16 +26,20 @@ import type {
   AnalyzedPhoto,
   PhotoAnalysis,
 } from "@/lib/ai/types"
-import type { GeneratePostsRequest, GeneratePostsResponse } from "@/lib/posts/types"
+import type { GeneratePostsResponse } from "@/lib/posts/types"
 import type { Platform } from "@/lib/posts/config"
 import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
 import { rateLimitRequest } from "@/lib/request-rate-limit"
+import { parseBody } from "@/lib/validation"
+
+const generatePostsSchema = z.object({
+  clientId: z.string().min(1, "clientId is required"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must use YYYY-MM-DD format"),
+})
 
 const MODEL = "claude-sonnet-4-6"
 
 export const maxDuration = 60
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,15 +52,9 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited
 
     // Parse and validate request
-    const body = (await request.json()) as GeneratePostsRequest
-    const { clientId: requestedClientId, startDate } = body
-
-    if (!startDate || !ISO_DATE_RE.test(startDate)) {
-      return NextResponse.json(
-        { error: "startDate must use YYYY-MM-DD format" },
-        { status: 400 }
-      )
-    }
+    const parsed = await parseBody(request, generatePostsSchema)
+    if ("error" in parsed) return parsed.error
+    const { clientId: requestedClientId, startDate } = parsed.data
 
     const { clientId } = await requireClientAccess(requestedClientId)
 
@@ -88,6 +87,11 @@ export async function POST(request: NextRequest) {
         industry: clients.industry,
         businessType: clients.businessType,
         productsServices: clients.productsServices,
+        toneOfVoice: clients.toneOfVoice,
+        targetCustomers: clients.targetCustomers,
+        brandPersonality: clients.brandPersonality,
+        bannedPhrases: clients.bannedPhrases,
+        examplePosts: clients.examplePosts,
       })
       .from(clients)
       .where(eq(clients.id, clientId))

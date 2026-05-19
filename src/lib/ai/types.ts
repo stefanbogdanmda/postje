@@ -15,6 +15,7 @@ export interface ClientProfile {
   postsPerDay: number
   bannedPhrases: string[]
   postLanguage: string
+  examplePosts: string[]
 }
 
 export interface DayPlan {

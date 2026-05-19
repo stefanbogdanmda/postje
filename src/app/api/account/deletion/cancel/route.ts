@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/db"
 import { cancelDeletionRequestByToken } from "@/lib/account/deletion-request"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 /**
  * Public endpoint hit by the cancel link in the deletion-confirmation email.
@@ -8,6 +9,9 @@ import { cancelDeletionRequestByToken } from "@/lib/account/deletion-request"
  * token was valid or not (information-leak prevention).
  */
 export async function GET(request: NextRequest) {
+  const rateLimited = await rateLimitRequest(request, "deletion-cancel", 10, 60_000)
+  if (rateLimited) return rateLimited
+
   const token = request.nextUrl.searchParams.get("token") ?? ""
 
   if (token) {

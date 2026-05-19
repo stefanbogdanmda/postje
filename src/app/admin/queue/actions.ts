@@ -1,52 +1,60 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
-import { publishPostToMeta } from "@/lib/meta/publish"
+import { revalidatePath } from "next/cache"
+import { publishPostToMeta, type PublishResult } from "@/lib/meta/publish"
+import { resetFailedPostToApproved } from "@/lib/posts/queue-repository"
 
-export interface PublishNowResult {
-  ok: true
-  metaPostId: string
+interface ActionResult {
+  success: boolean
+  metaPostId?: string
+  errorMessage?: string
+  errorReason?: string
 }
 
-export interface PublishNowErr {
-  ok: false
-  errorClass: string
-  errorMessage: string
+function toActionResult(r: PublishResult): ActionResult {
+  if (r.success) {
+    return { success: true, metaPostId: r.metaPostId }
+  }
+  if (r.guardFailure) {
+    return { success: false, errorReason: r.guardFailure }
+  }
+  return {
+    success: false,
+    errorReason: r.errorClass ?? "unknown",
+    errorMessage: r.errorMessage,
+  }
 }
-
-export type PublishNowActionResult = PublishNowResult | PublishNowErr
 
 /**
- * Admin-only. Triggers publishing of a single approved post. Wraps
- * `publishPostToMeta` so the dependency on `fetch` is implicit (server)
- * and the result is reduced to a JSON-serializable shape for the
- * client component.
+ * Operator clicks "Publish now" on an approved post.
  */
 export async function publishPostNowAction(
   postId: string
-): Promise<PublishNowActionResult> {
+): Promise<ActionResult> {
   const session = await auth()
-  if (!session?.user || session.user.role !== "admin") {
-    return { ok: false, errorClass: "auth", errorMessage: "Unauthorized" }
+  if (!session || session.user.role !== "admin") {
+    return { success: false, errorReason: "forbidden" }
   }
-
-  const result = await publishPostToMeta(
-    db,
-    postId,
-    { fetcher: fetch, now: new Date() },
-    session.user.id
-  )
-
+  const result = await publishPostToMeta(db, postId, session.user.id)
   revalidatePath("/admin/queue")
+  return toActionResult(result)
+}
 
-  if (result.ok) {
-    return { ok: true, metaPostId: result.metaPostId }
+/**
+ * Operator clicks "Retry" on a failed post. Flips status back to
+ * approved then immediately re-tries the publish.
+ */
+export async function retryFailedPostAction(
+  postId: string
+): Promise<ActionResult> {
+  const session = await auth()
+  if (!session || session.user.role !== "admin") {
+    return { success: false, errorReason: "forbidden" }
   }
-  return {
-    ok: false,
-    errorClass: result.errorClass,
-    errorMessage: result.errorMessage,
-  }
+  await resetFailedPostToApproved(db, postId)
+  const result = await publishPostToMeta(db, postId, session.user.id)
+  revalidatePath("/admin/queue")
+  return toActionResult(result)
 }

@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server"
+import { z } from "zod"
+import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
 import { clients } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { generateOAuthState } from "@/lib/meta/oauth-state"
 import { buildAuthUrl } from "@/lib/meta/oauth"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
-export async function GET(req: Request): Promise<NextResponse> {
+const querySchema = z.object({
+  clientId: z.string().min(1, "clientId is required"),
+})
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
@@ -15,11 +21,15 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
 
+  const rateLimited = await rateLimitRequest(req, "meta-connect", 5, 60_000)
+  if (rateLimited) return rateLimited
+
   const url = new URL(req.url)
-  const clientId = url.searchParams.get("clientId")
-  if (!clientId) {
+  const params = querySchema.safeParse({ clientId: url.searchParams.get("clientId") })
+  if (!params.success) {
     return NextResponse.json({ error: "clientId is required" }, { status: 400 })
   }
+  const { clientId } = params.data
 
   const rows = await db
     .select({ id: clients.id })

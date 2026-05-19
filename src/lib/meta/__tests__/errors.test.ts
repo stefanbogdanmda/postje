@@ -2,43 +2,42 @@ import { describe, it, expect } from "vitest"
 import { classifyMetaError } from "../errors"
 
 describe("classifyMetaError", () => {
-  it("classifies 5xx HTTP status as transient", () => {
-    const result = classifyMetaError({ httpStatus: 503, body: null })
-    expect(result.class).toBe("transient")
+  it("classifies 5xx as transient", () => {
+    expect(classifyMetaError(undefined, undefined, 500)).toBe("transient")
+    expect(classifyMetaError(undefined, undefined, 503)).toBe("transient")
   })
 
-  it("classifies 429 as transient", () => {
-    const result = classifyMetaError({ httpStatus: 429, body: null })
-    expect(result.class).toBe("transient")
+  it("classifies rate-limit codes as transient", () => {
+    expect(classifyMetaError(4, undefined, 400)).toBe("transient")
+    expect(classifyMetaError(17, undefined, 400)).toBe("transient")
+    expect(classifyMetaError(32, undefined, 400)).toBe("transient")
+    expect(classifyMetaError(613, undefined, 400)).toBe("transient")
   })
 
-  it("classifies network timeout (no httpStatus) as transient", () => {
-    const result = classifyMetaError({ httpStatus: null, body: null })
-    expect(result.class).toBe("transient")
+  it("classifies generic 'API unknown' (code 1, 2) as transient", () => {
+    expect(classifyMetaError(1, undefined, 500)).toBe("transient")
+    expect(classifyMetaError(2, undefined, 500)).toBe("transient")
   })
 
-  it("classifies OAuthException code 190 as token-expired", () => {
-    const result = classifyMetaError({
-      httpStatus: 400,
-      body: { error: { code: 190, type: "OAuthException", message: "Token expired" } },
-    })
-    expect(result.class).toBe("token-expired")
-    expect(result.code).toBe("190")
-    expect(result.message).toBe("Token expired")
+  it("classifies OAuthException (code 190) as permanent-token", () => {
+    expect(classifyMetaError(190, undefined, 400)).toBe("permanent-token")
+    expect(classifyMetaError(190, 463, 400)).toBe("permanent-token")
   })
 
-  it("classifies 4xx with non-auth error code as content-rejected", () => {
-    const result = classifyMetaError({
-      httpStatus: 400,
-      body: { error: { code: 100, message: "Invalid parameter" } },
-    })
-    expect(result.class).toBe("content-rejected")
-    expect(result.code).toBe("100")
+  it("classifies permission errors (200) as permanent-token", () => {
+    expect(classifyMetaError(200, undefined, 403)).toBe("permanent-token")
   })
 
-  it("classifies missing error body on 4xx as content-rejected", () => {
-    const result = classifyMetaError({ httpStatus: 400, body: null })
-    expect(result.class).toBe("content-rejected")
-    expect(result.message).toBe("HTTP 400")
+  it("classifies IG content-policy code (36003) as permanent-content", () => {
+    expect(classifyMetaError(36003, undefined, 400)).toBe("permanent-content")
+  })
+
+  it("classifies generic 400 with code 100 (invalid parameter) as permanent-content", () => {
+    expect(classifyMetaError(100, undefined, 400)).toBe("permanent-content")
+  })
+
+  it("returns unknown when nothing matches", () => {
+    expect(classifyMetaError(undefined, undefined, 400)).toBe("unknown")
+    expect(classifyMetaError(99999, undefined, 400)).toBe("unknown")
   })
 })

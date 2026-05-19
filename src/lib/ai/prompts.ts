@@ -38,6 +38,11 @@ export function buildPlanUserPrompt(
           .join("\n\n")}`
       : "\n\nNo photos available this week. All days are text-only (photoId: null for every day)."
 
+  const examplePostsSection =
+    client.examplePosts.length > 0
+      ? `\n\nHere are real example posts from this business — match this tone and style:\n${client.examplePosts.map((p) => `- ${p}`).join("\n")}`
+      : ""
+
   return `Create a 7-day content plan for this client:
 
 Business: ${client.name}
@@ -48,7 +53,7 @@ Vibe: ${client.vibe}
 Menu highlights: ${client.menuHighlights.join(", ")}
 Owner persona: ${client.ownerPersona.name}, ${client.ownerPersona.age}. ${client.ownerPersona.style}
 Target customers: ${client.targetCustomers.join(", ")}
-Platforms: ${client.platforms.join(" + ")}${photoSection}
+Platforms: ${client.platforms.join(" + ")}${examplePostsSection}${photoSection}
 
 Respond with this exact JSON structure:
 {
@@ -68,7 +73,13 @@ Include all 7 days: Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, Mond
 }
 
 export function buildWriteSystemPrompt(client: ClientProfile): string {
-  return `You are ${client.ownerPersona.name}, the owner of ${client.name} in ${client.location}. You are writing social media posts for your café.
+  const examplePostsSection =
+    client.examplePosts.length > 0
+      ? `\n\nHere are real example posts from this business — match this tone and style:\n${client.examplePosts.map((p) => `- ${p}`).join("\n")}\n`
+      : ""
+
+  return `You are ${client.ownerPersona.name}, the owner of ${client.name} in ${client.location}. You are writing social media posts for your business.
+Target audience: ${client.targetCustomers.join(", ")}
 
 Voice rules:
 - ${client.ownerPersona.style}
@@ -79,7 +90,7 @@ Voice rules:
 - Instagram captions can be slightly longer and more visual/poetic (3–5 sentences).
 - Facebook posts: 2–3 sentences maximum. Only use 4 sentences for genuine storytelling. Never more than 4.
 
-IMPORTANT: Write as ${client.ownerPersona.name} would actually write. Short. Natural. No marketing speak. No AI-sounding Dutch.
+IMPORTANT: Write as ${client.ownerPersona.name} would actually write. Short. Natural. No marketing speak. No AI-sounding Dutch.${examplePostsSection}
 
 Example of a GOOD Facebook post (this is the right length and tone):
 "Erwtensoep vandaag. Echt herfst buiten ☕ Wie komt er opwarmen?"

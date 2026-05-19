@@ -57,3 +57,36 @@ export async function seedTestPhoto(
 
   return photoId
 }
+
+/**
+ * Insert a Meta connection row for testing. Encrypts a placeholder
+ * token so the row is realistic.
+ */
+export async function seedMetaConnection(
+  db: TestDb,
+  clientId: string,
+  overrides: Partial<{
+    pageId: string
+    pageName: string
+    instagramBusinessId: string | null
+    accessTokenPlaintext: string
+    grantedScopes: string
+  }> = {}
+) {
+  if (!process.env.META_TOKEN_ENCRYPTION_KEY) {
+    process.env.META_TOKEN_ENCRYPTION_KEY =
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  }
+  const { encryptToken } = await import("@/lib/meta/crypto")
+  const accessTokenPlaintext =
+    overrides.accessTokenPlaintext ?? "PAGE_TOKEN_PLAINTEXT"
+  await db.insert(schema.metaConnections).values({
+    clientId,
+    pageId: overrides.pageId ?? "PAGE_1",
+    pageName: overrides.pageName ?? "Test Page",
+    instagramBusinessId: overrides.instagramBusinessId ?? "IG_1",
+    encryptedAccessToken: encryptToken(accessTokenPlaintext),
+    grantedScopes:
+      overrides.grantedScopes ?? "pages_manage_posts,instagram_content_publish",
+  })
+}
