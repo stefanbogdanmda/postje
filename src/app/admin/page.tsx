@@ -57,7 +57,17 @@ export default async function AdminPage() {
         </tbody>
       </table>
 
-      <div style={{ marginTop: "32px" }}>
+      <div style={{ marginTop: "32px", display: "flex", gap: "16px" }}>
+        <Link
+          href="/admin/attention"
+          style={{
+            color: "#1a1a1a",
+            textDecoration: "underline",
+            fontSize: "14px",
+          }}
+        >
+          Attention dashboard →
+        </Link>
         <Link
           href="/admin/clients"
           style={{
@@ -74,7 +84,6 @@ export default async function AdminPage() {
             color: "#1a1a1a",
             textDecoration: "underline",
             fontSize: "14px",
-            marginLeft: "16px",
           }}
         >
           Generate posts preview →
