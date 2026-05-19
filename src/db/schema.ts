@@ -278,3 +278,34 @@ export const metaConnections = pgTable(
     uniqueIndex("meta_connections_client_page_idx").on(t.clientId, t.pageId),
   ]
 )
+
+// ──────────────────────────────────────────────
+// publishAttempts — one row per Meta API publish attempt, success or fail.
+// The full audit trail; posts.publishError is just the most-recent message
+// denormalized for the queue display. Cascades on post delete.
+// ──────────────────────────────────────────────
+export const publishAttempts = pgTable(
+  "publish_attempts",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    postId: text("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    attemptedAt: timestamp("attemptedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    attemptedBy: text("attemptedBy").notNull(),
+    metaPostId: text("metaPostId"),
+    success: boolean("success").notNull(),
+    errorClass: text("errorClass", {
+      enum: ["transient", "permanent-token", "permanent-content", "unknown"],
+    }),
+    errorCode: text("errorCode"),
+    errorMessage: text("errorMessage"),
+    requestDurationMs: integer("requestDurationMs"),
+  },
+  (t) => [index("publish_attempts_post_idx").on(t.postId)]
+)
