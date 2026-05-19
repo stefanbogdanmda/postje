@@ -70,30 +70,79 @@ function assertChanged(
   }
 }
 
-async function getClientPostTime(db: Db, clientId: string): Promise<string> {
+interface ClientScheduleInfo {
+  postTime: string
+  timezone: string
+}
+
+async function getClientScheduleInfo(
+  db: Db,
+  clientId: string
+): Promise<ClientScheduleInfo> {
   const rows = await db
-    .select({ industry: schema.clients.industry })
+    .select({
+      industry: schema.clients.industry,
+      timezone: schema.clients.timezone,
+    })
     .from(schema.clients)
     .where(eq(schema.clients.id, clientId))
     .limit(1)
 
   const industry = rows[0]?.industry?.toLowerCase().trim()
-  if (!industry) return DEFAULT_POST_TIME
+  const timezone = rows[0]?.timezone ?? "Europe/Amsterdam"
 
-  const exactMatch = INDUSTRY_POST_TIMES[industry]
-  if (exactMatch) return exactMatch
+  let postTime = DEFAULT_POST_TIME
+  if (industry) {
+    const exactMatch = INDUSTRY_POST_TIMES[industry]
+    if (exactMatch) {
+      postTime = exactMatch
+    } else {
+      const partialMatch = Object.entries(INDUSTRY_POST_TIMES).find(([key]) =>
+        industry.includes(key)
+      )
+      if (partialMatch) {
+        postTime = partialMatch[1]
+      }
+    }
+  }
 
-  const partialMatch = Object.entries(INDUSTRY_POST_TIMES).find(([key]) =>
-    industry.includes(key)
-  )
-
-  return partialMatch?.[1] ?? DEFAULT_POST_TIME
+  return { postTime, timezone }
 }
 
-function buildPublishAt(scheduledDate: string, postTime: string): Date {
+/**
+ * Build the exact UTC timestamp for when a post should be published,
+ * given the client's local date, time, and IANA timezone.
+ *
+ * Without timezone handling, `new Date(year, month, day, hour, minute)`
+ * uses the SERVER's local timezone (UTC on Vercel). That means a Dutch
+ * client saying "post at 08:00" gets 08:00 UTC instead of 08:00
+ * Amsterdam time — 1-2 hours too early depending on DST.
+ *
+ * This function uses the Intl API (built into Node.js / all modern
+ * runtimes) to discover the timezone's UTC offset on the target date,
+ * then subtracts it so the resulting Date is the correct UTC instant.
+ */
+export function buildPublishAt(
+  scheduledDate: string,
+  postTime: string,
+  timezone: string
+): Date {
+  const tz = timezone || "Europe/Amsterdam"
   const [year, month, day] = scheduledDate.split("-").map(Number)
   const [hour, minute] = postTime.split(":").map(Number)
-  return new Date(year, month - 1, day, hour, minute, 0, 0)
+
+  // Treat the desired local time as if it were UTC
+  const naiveUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0))
+
+  // Find what the timezone's offset is on this particular date.
+  // We do this by formatting the same instant in both UTC and the
+  // target timezone, then comparing the two.
+  const utcStr = naiveUtc.toLocaleString("en-US", { timeZone: "UTC" })
+  const tzStr = naiveUtc.toLocaleString("en-US", { timeZone: tz })
+  const offsetMs = new Date(tzStr).getTime() - new Date(utcStr).getTime()
+
+  // actual UTC time = desired local time − offset
+  return new Date(naiveUtc.getTime() - offsetMs)
 }
 
 /**
@@ -330,11 +379,11 @@ export async function approvePost(
   }
 
   const now = new Date()
-  const postTime = await getClientPostTime(db, clientId)
+  const { postTime, timezone } = await getClientScheduleInfo(db, clientId)
   const updates: Record<string, unknown> = {
     status: "approved",
     approvedAt: now,
-    publishAt: buildPublishAt(post.scheduledDate, postTime),
+    publishAt: buildPublishAt(post.scheduledDate, postTime, timezone),
     updatedAt: now,
   }
   if (newContent !== undefined) {

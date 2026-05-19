@@ -57,6 +57,14 @@ export const clients = pgTable("clients", {
   updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
+  timezone: text("timezone").notNull().default("Europe/Amsterdam"),
+  toneOfVoice: text("toneOfVoice"),
+  targetCustomers: text("targetCustomers"),
+  brandPersonality: text("brandPersonality"),
+  bannedPhrases: jsonb("bannedPhrases").$type<string[]>().notNull().default([]),
+  examplePosts: jsonb("examplePosts").$type<string[]>().notNull().default([]),
+  calibrationStartDate: timestamp("calibrationStartDate", { withTimezone: true, mode: "date" }),
+  publishMode: text("publishMode", { enum: ["manual", "auto"] }).notNull().default("auto"),
 })
 
 // ──────────────────────────────────────────────
@@ -280,10 +288,9 @@ export const metaConnections = pgTable(
 )
 
 // ──────────────────────────────────────────────
-// publishAttempts — audit trail for every Meta API publish attempt.
-// One row per attempt. The `success` flag plus error fields tell us
-// what happened; the most-recent error is also denormalized onto
-// posts.publishError for the Attention List.
+// publishAttempts — one row per Meta API publish attempt, success or fail.
+// The full audit trail; posts.publishError is just the most-recent message
+// denormalized for the queue display. Cascades on post delete.
 // ──────────────────────────────────────────────
 export const publishAttempts = pgTable(
   "publish_attempts",
@@ -302,11 +309,39 @@ export const publishAttempts = pgTable(
     metaPostId: text("metaPostId"),
     success: boolean("success").notNull(),
     errorClass: text("errorClass", {
-      enum: ["transient", "token-expired", "content-rejected"],
+      enum: ["transient", "permanent-token", "permanent-content", "unknown"],
     }),
     errorCode: text("errorCode"),
     errorMessage: text("errorMessage"),
     requestDurationMs: integer("requestDurationMs"),
   },
   (t) => [index("publish_attempts_post_idx").on(t.postId)]
+)
+
+
+// ──────────────────────────────────────────────
+// postFlags — client-reported issues on published posts.
+// Flag button on published posts alerts Stefan immediately.
+// ──────────────────────────────────────────────
+export const postFlags = pgTable(
+  "post_flags",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    postId: text("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    clientId: text("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    reason: text("reason"),
+    flaggedAt: timestamp("flaggedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    resolvedAt: timestamp("resolvedAt", { withTimezone: true, mode: "date" }),
+    resolvedBy: text("resolvedBy"),
+  },
+  (t) => [index("post_flags_post_idx").on(t.postId)]
 )

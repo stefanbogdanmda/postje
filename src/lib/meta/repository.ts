@@ -138,7 +138,7 @@ export interface PublishAttemptInput {
   attemptedBy: string
   success: boolean
   metaPostId?: string | null
-  errorClass?: "transient" | "token-expired" | "content-rejected" | null
+  errorClass?: "transient" | "permanent-token" | "permanent-content" | "unknown" | null
   errorCode?: string | null
   errorMessage?: string | null
   requestDurationMs?: number | null

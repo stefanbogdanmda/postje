@@ -165,7 +165,7 @@ describe("insertPublishAttempt", () => {
       postId,
       attemptedBy: "user-admin",
       success: false,
-      errorClass: "content-rejected",
+      errorClass: "permanent-content",
       errorCode: "100",
       errorMessage: "Invalid image URL",
       requestDurationMs: 180,
@@ -174,7 +174,7 @@ describe("insertPublishAttempt", () => {
     const rows = await db.select().from(schema.publishAttempts)
     expect(rows).toHaveLength(1)
     expect(rows[0].success).toBe(false)
-    expect(rows[0].errorClass).toBe("content-rejected")
+    expect(rows[0].errorClass).toBe("permanent-content")
     expect(rows[0].errorMessage).toBe("Invalid image URL")
   })
 })

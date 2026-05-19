@@ -1,376 +1,261 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
+import { publishToFacebook, publishToInstagram, publishPostToMeta } from "../publish"
+import { createTestDb, seedTestClient, seedTestPhoto, seedMetaConnection, type TestDb } from "@/test/db"
+import { posts, publishAttempts } from "@/db/schema"
 import { eq } from "drizzle-orm"
-import { createTestDb, seedTestClient, seedTestPhoto, type TestDb } from "@/test/db"
-import { upsertConnection } from "../repository"
-import { encryptToken } from "../crypto"
-import { publishPostToMeta } from "../publish"
-import * as schema from "@/db/schema"
-import type { Fetcher } from "../graph-client"
 
-const CLIENT_ID = "test-client-001"
-const ORIGINAL_KEY = process.env.META_TOKEN_ENCRYPTION_KEY
-
-let db: TestDb
-
-beforeEach(async () => {
-  process.env.META_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64")
-  db = await createTestDb()
-  await seedTestClient(db, CLIENT_ID)
-  await upsertConnection(db, {
-    clientId: CLIENT_ID,
-    pageId: "PAGE_1",
-    pageName: "Café Test",
-    instagramBusinessId: "IG_1",
-    encryptedAccessToken: encryptToken("test-token"),
-    grantedScopes: "pages_manage_posts,instagram_content_publish",
-  })
+beforeEach(() => {
+  process.env.META_GRAPH_VERSION = "v21.0"
 })
 
-afterAll(() => {
-  process.env.META_TOKEN_ENCRYPTION_KEY = ORIGINAL_KEY
-})
-
-function jsonResponse(status: number, body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   })
 }
 
-async function seedApprovedPost(args: {
-  id: string
-  platform: "facebook" | "instagram"
-  photoId?: string | null
+describe("publishToFacebook — with photo", () => {
+  it("calls /PAGE_ID/photos with message + url and returns post_id", async () => {
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(init?.method).toBe("POST")
+      expect(url).toBe("https://graph.facebook.com/v21.0/PAGE_1/photos")
+      const body = init?.body as URLSearchParams
+      expect(body.get("message")).toBe("Hello world")
+      expect(body.get("url")).toBe("https://example.com/photo.jpg")
+      expect(body.get("access_token")).toBe("PAGE_TOKEN")
+      return jsonResponse({ id: "PHOTO_ID", post_id: "FEED_POST_ID" })
+    })
+
+    const id = await publishToFacebook(
+      { pageId: "PAGE_1", accessToken: "PAGE_TOKEN" },
+      { content: "Hello world", photoUrl: "https://example.com/photo.jpg" },
+      fetcher
+    )
+    expect(id).toBe("FEED_POST_ID")
+  })
+
+  it("propagates graph errors as MetaApiError", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ error: { message: "Invalid token", code: 190 } }, 400)
+    )
+    await expect(
+      publishToFacebook(
+        { pageId: "PAGE_1", accessToken: "BAD" },
+        { content: "x", photoUrl: "https://example.com/photo.jpg" },
+        fetcher
+      )
+    ).rejects.toThrow(/Invalid token/)
+  })
+})
+
+describe("publishToFacebook — without photo", () => {
+  it("calls /PAGE_ID/feed with message only and returns id", async () => {
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://graph.facebook.com/v21.0/PAGE_1/feed")
+      const body = init?.body as URLSearchParams
+      expect(body.get("message")).toBe("Text-only post")
+      expect(body.get("url")).toBeNull()
+      return jsonResponse({ id: "FEED_ID" })
+    })
+    const id = await publishToFacebook(
+      { pageId: "PAGE_1", accessToken: "PAGE_TOKEN" },
+      { content: "Text-only post", photoUrl: null },
+      fetcher
+    )
+    expect(id).toBe("FEED_ID")
+  })
+})
+
+describe("publishToInstagram", () => {
+  it("creates a media container then publishes it and returns the final id", async () => {
+    let step = 0
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      step++
+      const body = init?.body as URLSearchParams
+      if (step === 1) {
+        expect(url).toBe("https://graph.facebook.com/v21.0/IG_1/media")
+        expect(body.get("image_url")).toBe("https://example.com/p.jpg")
+        expect(body.get("caption")).toBe("Hello IG")
+        expect(body.get("access_token")).toBe("PAGE_TOKEN")
+        return jsonResponse({ id: "CONTAINER_123" })
+      }
+      if (step === 2) {
+        expect(url).toBe("https://graph.facebook.com/v21.0/IG_1/media_publish")
+        expect(body.get("creation_id")).toBe("CONTAINER_123")
+        expect(body.get("access_token")).toBe("PAGE_TOKEN")
+        return jsonResponse({ id: "IG_MEDIA_FINAL" })
+      }
+      throw new Error("unexpected extra fetch")
+    })
+    const id = await publishToInstagram(
+      { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+      { content: "Hello IG", photoUrl: "https://example.com/p.jpg" },
+      fetcher
+    )
+    expect(id).toBe("IG_MEDIA_FINAL")
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it("throws a no-photo error without calling Meta when photoUrl is null", async () => {
+    const fetcher = vi.fn()
+    await expect(
+      publishToInstagram(
+        { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+        { content: "no image", photoUrl: null },
+        fetcher
+      )
+    ).rejects.toThrow(/photo/i)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it("propagates a container-step failure without calling step 2", async () => {
+    let step = 0
+    const fetcher = vi.fn(async () => {
+      step++
+      return jsonResponse({ error: { message: "image fetch failed", code: 324 } }, 400)
+    })
+    await expect(
+      publishToInstagram(
+        { igUserId: "IG_1", accessToken: "PAGE_TOKEN" },
+        { content: "x", photoUrl: "https://example.com/p.jpg" },
+        fetcher
+      )
+    ).rejects.toThrow(/image fetch failed/)
+    expect(step).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────
+// Orchestrator tests — real DB (PGlite), mocked HTTP
+// ─────────────────────────────────────────────────────────
+
+const CLIENT_ID = "test-client-001"
+const ENC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+let db: TestDb
+
+async function seedApprovedPost(opts: {
+  platform: "instagram" | "facebook"
+  withPhoto: boolean
   content?: string
 }) {
-  await db.insert(schema.posts).values({
-    id: args.id,
+  const photoId = opts.withPhoto ? "photo-1" : null
+  if (photoId) await seedTestPhoto(db, CLIENT_ID, photoId)
+  await db.insert(posts).values({
     clientId: CLIENT_ID,
-    platform: args.platform,
-    scheduledDate: "2026-05-20",
+    platform: opts.platform,
+    scheduledDate: "2026-05-12",
     status: "approved",
-    content: args.content ?? "Hello world",
-    photoId: args.photoId ?? null,
+    content: opts.content ?? "hello",
     reasoning: "test",
+    photoId,
+    publishAt: new Date(),
+    approvedAt: new Date(),
   })
+  const row = await db.select().from(posts).where(eq(posts.clientId, CLIENT_ID))
+  return row[0]
 }
 
-describe("publishPostToMeta — Facebook path", () => {
-  it("publishes a text-only Facebook post via /feed", async () => {
-    await seedApprovedPost({ id: "post-fb-1", platform: "facebook" })
+describe("publishPostToMeta — orchestrator", () => {
+  beforeEach(async () => {
+    process.env.META_TOKEN_ENCRYPTION_KEY = ENC_KEY
+    process.env.META_GRAPH_VERSION = "v21.0"
+    db = await createTestDb()
+    await seedTestClient(db, CLIENT_ID)
+    await seedMetaConnection(db, CLIENT_ID, {
+      accessTokenPlaintext: "PAGE_TOKEN_PLAINTEXT",
+    })
+  })
 
-    let capturedUrl = ""
-    const fetcher: Fetcher = async (url) => {
-      capturedUrl = url
-      return jsonResponse(200, { id: "PAGE_1_999" })
-    }
+  it("returns guard-failed when the post is not in 'approved' status", async () => {
+    await db.insert(posts).values({
+      clientId: CLIENT_ID,
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      status: "draft",
+      content: "x",
+      reasoning: "x",
+    })
+    const draft = (await db.select().from(posts))[0]
+    const result = await publishPostToMeta(db, draft.id, "admin-1", vi.fn())
+    expect(result.success).toBe(false)
+    expect(result.guardFailure).toBe("not-approved")
+    const attempts = await db.select().from(publishAttempts)
+    expect(attempts).toHaveLength(0)
+  })
 
-    const result = await publishPostToMeta(
-      db,
-      "post-fb-1",
-      { fetcher, now: new Date() },
-      "user-admin"
+  it("returns guard-failed when the post has no meta connection", async () => {
+    const { metaConnections } = await import("@/db/schema")
+    await db.delete(metaConnections)
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const result = await publishPostToMeta(db, post.id, "admin-1", vi.fn())
+    expect(result.success).toBe(false)
+    expect(result.guardFailure).toBe("no-connection")
+  })
+
+  it("publishes a Facebook text post and updates state on success", async () => {
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "FB_FEED_1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
     )
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.metaPostId).toBe("PAGE_1_999")
-    }
-    expect(capturedUrl).toContain("/PAGE_1/feed")
-
-    const [post] = await db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.id, "post-fb-1"))
-    expect(post.status).toBe("published")
-    expect(post.publishedAt).not.toBeNull()
-    expect(post.publishError).toBeNull()
-
-    const attempts = await db.select().from(schema.publishAttempts)
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(true)
+    expect(result.metaPostId).toBe("FB_FEED_1")
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("published")
+    expect(updated.publishedAt).toBeInstanceOf(Date)
+    expect(updated.publishError).toBeNull()
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
     expect(attempts).toHaveLength(1)
     expect(attempts[0].success).toBe(true)
+    expect(attempts[0].metaPostId).toBe("FB_FEED_1")
+    expect(attempts[0].attemptedBy).toBe("admin-1")
+    expect(typeof attempts[0].requestDurationMs).toBe("number")
   })
 
-  it("publishes a photo Facebook post via /photos with url + message", async () => {
-    await seedTestPhoto(db, CLIENT_ID, "photo-1")
-    await seedApprovedPost({ id: "post-fb-2", platform: "facebook", photoId: "photo-1" })
-
-    let captured: { url: string; body: string } = { url: "", body: "" }
-    const fetcher: Fetcher = async (url, init) => {
-      captured = { url, body: String(init?.body ?? "") }
-      return jsonResponse(200, { id: "PAGE_1_888" })
-    }
-
-    const result = await publishPostToMeta(
-      db,
-      "post-fb-2",
-      { fetcher, now: new Date() },
-      "user-admin"
+  it("records a failure and flips status to 'failed' when Meta returns an error", async () => {
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ error: { message: "Token expired", code: 190 } }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      )
     )
-
-    expect(result.ok).toBe(true)
-    expect(captured.url).toContain("/PAGE_1/photos")
-    expect(captured.body).toContain("url=https")
-    expect(captured.body).toContain("photo-1.jpg")
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(false)
+    expect(result.errorClass).toBe("permanent-token")
+    expect(result.errorMessage).toMatch(/Token expired/)
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("failed")
+    expect(updated.publishError).toMatch(/Token expired/)
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0].success).toBe(false)
+    expect(attempts[0].errorClass).toBe("permanent-token")
   })
 
-  it("marks status=failed and writes error on permanent content rejection", async () => {
-    await seedApprovedPost({ id: "post-fb-3", platform: "facebook" })
-
-    const fetcher: Fetcher = async () =>
-      jsonResponse(400, { error: { code: 100, message: "Invalid parameter" } })
-
-    const result = await publishPostToMeta(
-      db,
-      "post-fb-3",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorClass).toBe("content-rejected")
-      expect(result.errorMessage).toContain("Invalid parameter")
-    }
-
-    const [post] = await db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.id, "post-fb-3"))
-    expect(post.status).toBe("failed")
-    expect(post.publishError).toContain("Invalid parameter")
-    expect(post.publishedAt).toBeNull()
-  })
-
-  it("marks status=failed but does not lose publish error on token expiry", async () => {
-    await seedApprovedPost({ id: "post-fb-4", platform: "facebook" })
-
-    const fetcher: Fetcher = async () =>
-      jsonResponse(400, {
-        error: { code: 190, type: "OAuthException", message: "Token expired" },
-      })
-
-    const result = await publishPostToMeta(
-      db,
-      "post-fb-4",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorClass).toBe("token-expired")
-    }
-
-    const [post] = await db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.id, "post-fb-4"))
-    expect(post.status).toBe("failed")
-    expect(post.publishError).toContain("Token expired")
-  })
-
-  it("returns an error when the client has no Meta connection", async () => {
-    const otherClient = "test-client-002"
-    await seedTestClient(db, otherClient)
-    await db.insert(schema.posts).values({
-      id: "post-orphan",
-      clientId: otherClient,
-      platform: "facebook",
-      scheduledDate: "2026-05-20",
-      status: "approved",
-      content: "Hi",
-      reasoning: "test",
-    })
-
-    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
-    const result = await publishPostToMeta(
-      db,
-      "post-orphan",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorMessage).toMatch(/no.*meta.*connection/i)
-    }
-    const [post] = await db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.id, "post-orphan"))
-    expect(post.status).toBe("approved")
-  })
-
-  it("returns an error when the post is not in 'approved' status", async () => {
-    await db.insert(schema.posts).values({
-      id: "post-draft",
-      clientId: CLIENT_ID,
-      platform: "facebook",
-      scheduledDate: "2026-05-20",
-      status: "draft",
-      content: "Hi",
-      reasoning: "test",
-    })
-
-    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
-    const result = await publishPostToMeta(
-      db,
-      "post-draft",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorMessage).toMatch(/not approved/i)
-    }
-  })
-})
-
-describe("publishPostToMeta — Instagram path", () => {
-  it("performs the two-step container + publish flow", async () => {
-    await seedTestPhoto(db, CLIENT_ID, "photo-ig-1")
-    await seedApprovedPost({
-      id: "post-ig-1",
-      platform: "instagram",
-      photoId: "photo-ig-1",
-    })
-
-    const calls: string[] = []
-    const fetcher: Fetcher = async (url) => {
-      calls.push(url)
-      if (url.includes("/media_publish")) {
-        return jsonResponse(200, { id: "IG_FINAL_999" })
-      }
-      if (url.includes("/media")) {
-        return jsonResponse(200, { id: "CONTAINER_123" })
-      }
-      throw new Error(`Unexpected URL: ${url}`)
-    }
-
-    const result = await publishPostToMeta(
-      db,
-      "post-ig-1",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.metaPostId).toBe("IG_FINAL_999")
-    }
-    expect(calls).toHaveLength(2)
-    expect(calls[0]).toContain("/IG_1/media")
-    expect(calls[0]).not.toContain("media_publish")
-    expect(calls[1]).toContain("/IG_1/media_publish")
-  })
-
-  it("fails fast when the post has no photo", async () => {
-    await seedApprovedPost({ id: "post-ig-2", platform: "instagram" })
-
-    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
-    const result = await publishPostToMeta(
-      db,
-      "post-ig-2",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorClass).toBe("precondition")
-      expect(result.errorMessage).toMatch(/require.*photo/i)
-    }
-    const [post] = await db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.id, "post-ig-2"))
-    expect(post.status).toBe("approved")
-  })
-
-  it("fails fast when the connection has no instagramBusinessId", async () => {
-    await db.delete(schema.metaConnections).where(eq(schema.metaConnections.clientId, CLIENT_ID))
-    await upsertConnection(db, {
-      clientId: CLIENT_ID,
-      pageId: "PAGE_1",
-      pageName: "Café Test",
-      instagramBusinessId: null,
-      encryptedAccessToken: encryptToken("test-token"),
-      grantedScopes: "pages_manage_posts",
-    })
-    await seedTestPhoto(db, CLIENT_ID, "photo-ig-3")
-    await seedApprovedPost({
-      id: "post-ig-3",
-      platform: "instagram",
-      photoId: "photo-ig-3",
-    })
-
-    const fetcher: Fetcher = async () => jsonResponse(200, { id: "x" })
-    const result = await publishPostToMeta(
-      db,
-      "post-ig-3",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorMessage).toMatch(/instagram/i)
-    }
-  })
-
-  it("classifies a container-step failure correctly", async () => {
-    await seedTestPhoto(db, CLIENT_ID, "photo-ig-4")
-    await seedApprovedPost({
-      id: "post-ig-4",
-      platform: "instagram",
-      photoId: "photo-ig-4",
-    })
-
-    const fetcher: Fetcher = async (url) => {
-      if (url.includes("/media") && !url.includes("publish")) {
-        return jsonResponse(400, {
-          error: { code: 9004, message: "Image fetch failed" },
+  it("publishes an Instagram post via the two-step flow", async () => {
+    const post = await seedApprovedPost({ platform: "instagram", withPhoto: true })
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "CONTAINER" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
         })
-      }
-      return jsonResponse(200, { id: "should-not-reach" })
-    }
-
-    const result = await publishPostToMeta(
-      db,
-      "post-ig-4",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorClass).toBe("content-rejected")
-    }
-  })
-})
-
-describe("publishPostToMeta — status guard", () => {
-  it("does not flip status when post is already published (race)", async () => {
-    await seedApprovedPost({ id: "post-race", platform: "facebook" })
-    await db
-      .update(schema.posts)
-      .set({ status: "published", publishedAt: new Date() })
-      .where(eq(schema.posts.id, "post-race"))
-
-    const fetcher: Fetcher = async () => jsonResponse(200, { id: "META_X" })
-    const result = await publishPostToMeta(
-      db,
-      "post-race",
-      { fetcher, now: new Date() },
-      "user-admin"
-    )
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errorClass).toBe("precondition")
-      expect(result.errorMessage).toMatch(/not approved/i)
-    }
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "IG_FINAL" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(true)
+    expect(result.metaPostId).toBe("IG_FINAL")
   })
 })

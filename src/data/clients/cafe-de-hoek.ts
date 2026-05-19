@@ -38,4 +38,5 @@ export const cafeDeHoek: ClientProfile = {
     "passie voor",
   ],
   postLanguage: "Dutch",
+  examplePosts: [],
 }
