@@ -2,15 +2,19 @@ import { auth } from "@/lib/auth"
 import { db } from "@/db"
 import { users } from "@/db/schema"
 import { eq } from "drizzle-orm"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { del } from "@vercel/blob"
 import { deleteUserAccount } from "@/lib/account/delete"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session || session.user.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
+
+  const rateLimited = await rateLimitRequest(request, "admin-delete-user", 5, 60_000)
+  if (rateLimited) return rateLimited
 
   const body = await request.json()
   const { userId } = body as { userId: string }
