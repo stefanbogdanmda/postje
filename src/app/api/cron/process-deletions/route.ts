@@ -2,19 +2,13 @@ import { NextResponse } from "next/server"
 import { del } from "@vercel/blob"
 import { db } from "@/db"
 import { processDueDeletions } from "@/lib/account/process-deletions"
-
-const CRON_SECRET = process.env.CRON_SECRET
+import { verifyCronSecret } from "@/lib/cron-auth"
 
 export async function GET(req: Request) {
-  if (!CRON_SECRET) {
-    console.error("[cron] CRON_SECRET not configured — refusing to run")
-    return new NextResponse(null, { status: 500 })
-  }
-
   const authHeader = req.headers.get("authorization")
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
-    return new NextResponse(null, { status: 401 })
-  }
+
+  const cronAuth = verifyCronSecret(authHeader)
+  if (!cronAuth.ok) return cronAuth.response
 
   try {
     const result = await processDueDeletions(
