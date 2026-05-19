@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/publish-due",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-tokens",
+      "schedule": "0 3 * * *"
     }
   ]
 }
