@@ -1,260 +1,195 @@
-# Meta Setup Guide — Test Accounts for Social AI
+# Meta Setup Guide — First Test with Tommy Culinair
 
-This guide walks you through creating the Meta-side accounts that Social AI needs before it can publish to Facebook and Instagram. Everything in this guide is free. Total time: 25–35 focused minutes. Don't split it across multiple days — Meta's interface is much harder to navigate if you keep losing your place.
+This guide walks through everything Social AI needs on the Meta side before it can publish to Facebook and Instagram. Our first test subject is **Tommy Culinair**, a real HoReCa business owned by a friend. Using a real client (instead of fake test accounts) is closer to how production will actually work — Tommy will go through the exact OAuth flow that future paying clients go through.
+
+Total time: ~25 focused minutes on your side, plus ~10 minutes Tommy has to spend on his phone. Don't split this across multiple days — Meta's UI is easier to navigate while you've still got the layout in your head.
 
 You'll come out of this with:
 
-- A test Facebook **Page**
-- A test Instagram **Business** account linked to that Page
-- A **Meta Developer account** + a registered **Meta App** in Development Mode
-- The **App ID and App Secret** that Social AI uses to run its OAuth flow
+- A Facebook **Page** for Tommy Culinair, linked to his existing Business Instagram
+- Tommy added as an accepted **tester** on the Social AI App
+- The Meta App fully configured: products added, OAuth redirect URI whitelisted
+- The **App ID** and **App Secret** ready to drop into `.env.local`
 
-These four things are the keys that let our code talk to Meta. The OAuth flow built into Social AI (Plan #5a) handles fetching the long-lived page access token automatically — you no longer need to do that by hand.
+The OAuth flow built into Social AI (Plan #5a) then handles fetching and encrypting the long-lived Page access token automatically when Tommy clicks **Connect** in the dashboard.
 
-> **Updated 2026-05-12:** Step 9 below ("Configure the OAuth redirect URI") is new and required for Social AI's Connect button to work. The old Step 10 (manual token fetch via Graph API Explorer) is now **Step 11 — Optional**, kept only for debugging and education. You can stop after Step 10 and proceed straight to the smoke test.
+## What's changed (2026-05-14)
 
-## Vocabulary You'll See
+Previous versions of this doc walked you through creating fake test accounts (`Café Test Arnhem`). We're skipping that and going straight to a real client. The structure of the doc has shifted to reflect this:
+
+- **Two actors now.** Some steps are Tommy's job; some are yours. Each step is labeled.
+- **Three setup steps are already done** (developer account, app shell, your Meta Business Account) — those sections are now short verification checklists, not full walkthroughs.
+- **The fake-account creation steps are gone.** If Tommy bails for any reason and we need to fall back to a fake account, ask Claude to restore those steps from git history.
+- **Old Step 11 (manual Graph API token fetch)** is renumbered Step 7 and remains optional/educational.
+
+## Who does what
+
+| Done by | Steps |
+|---|---|
+| **Tommy** | Step 1 (create FB Page), Step 2 (link his IG to it), Step 5 (accept tester invites) |
+| **You (Stefan)** | Steps 3, 4, 5a, 5b (App config + sending invites), and the smoke test |
+
+There's a copy-pasteable **"Send this to Tommy"** block at the bottom you can hand him so he knows exactly what's on his plate.
+
+## Vocabulary you'll see
 
 | Term | What it actually is |
 |---|---|
-| **Personal account / Profile** | The Facebook account you log into with your name. It's the *owner identity* — Pages, Apps, and Business accounts all hang off this. |
-| **Page** | What businesses post AS. Different from a profile. You can own many. |
-| **Instagram Business account** | An IG account flagged as "professional". Required for API publishing. Personal IG accounts cannot be posted to programmatically — Meta blocks this. |
-| **Meta Business Account** (or "Business Portfolio") | A container that holds your Pages, Apps, and ad accounts together. Confusingly different from the Page itself. You probably don't have one yet — you'll create one. |
-| **Meta App** | Your registration with Meta saying "I'm building software that will use the Graph API." Has an App ID and App Secret. |
-| **Development Mode** | The state your App is in when it's only usable by people you've explicitly added as testers. Free, no review required. We live here until you have ~10–20 paying clients. |
-| **Access token** | The credential we use to make API calls. Comes in three flavors: short-lived user (1 hour), long-lived user (~60 days), and Page token (essentially permanent, what we actually store). |
+| **Personal account / Profile** | The Facebook account a person logs into with their real name. It's the *owner identity* — Pages, Apps, and Business accounts all hang off this. Tommy needs one of these (he has one). |
+| **Page** | What businesses post AS on Facebook. Different from a profile. Tommy doesn't have one yet — Step 1 creates it. |
+| **Instagram Business account** | An IG account flagged as "professional → Business". Required for API publishing. Tommy already has this. |
+| **Meta Business Account** (or "Business Portfolio") | A container that holds Pages, Apps, and ad accounts together. You (Stefan) have one called `Social AI`; Tommy doesn't need one. |
+| **Meta App** | Your registration with Meta saying "I'm building software that uses the Graph API." Has an App ID and App Secret. You already created this (`Social AI Dev`). |
+| **Development Mode** | The state your App is in when only people you've explicitly added as testers can authorize it. Free, no review required. We live here until ~10–20 paying clients. |
+| **Access token** | The credential we use to make API calls. Three flavors: short-lived user (1h), long-lived user (~60d), and Page token (effectively non-expiring). The OAuth flow does the trading automatically. |
 | **Scope / Permission** | A specific thing a token is allowed to do, e.g. `pages_manage_posts` or `instagram_content_publish`. |
 
-## A Note On Meta's UI
+## A note on Meta's UI
 
-Meta rearranges the developer console roughly every 6 months. Button labels, menu locations, and even the names of products move around. **This guide describes what to *look for*, not exact pixel locations.** If something doesn't match, search the page for the keyword (Ctrl+F your friend), and screenshot what you see — we'll resolve it together when you come back.
-
-A test business identity will make this easier. Pick a fake-but-believable Dutch business name and use it consistently. For this guide I'll use **"Café Test Arnhem"** as the placeholder — substitute your own.
+Meta rearranges the developer console roughly every 6 months. Button labels and menu locations move around. **This guide describes what to *look for*, not exact pixel locations.** If something doesn't match, search the page for the keyword (Ctrl+F), screenshot what you see, and we'll resolve it together when you come back.
 
 ---
 
-## Step 1 — Create the test Facebook Page (2 min)
+## ✅ Already done
 
-1. Log into facebook.com with your personal account.
-2. In the left sidebar, click **Pages** (if you don't see it, click "See more" first).
-3. Click **Create new Page**.
-4. Page name: `Café Test Arnhem` (or your pick).
-5. Category: `Café` — start typing and pick one of the suggestions.
-6. Click **Create Page**.
-7. Skip every optional setup step (cover photo, etc.). We don't need a real-looking Page.
+You've already completed these — confirm each is still true, then skip ahead.
 
-**Expected outcome:** You're on the new Page's admin view. Note its URL — it'll have a number in it like `facebook.com/profile.php?id=61555...`. That number is the **Page ID**. Save it somewhere (we'll need it later).
+- **Meta Developer account** created at developers.facebook.com.
+- **Meta Business Account** (named `Social AI`, your operator-side container) created at business.facebook.com.
+- **Meta App** (`Social AI Dev`) created, type **Business**, in **Development Mode**.
 
-## Step 2 — Create the Instagram account (5 min)
+Quick verification: open developers.facebook.com → **My Apps**. You should see `Social AI Dev` listed and the header on its dashboard should read **Development**.
 
-You'll need a fresh email address. Trick: Gmail ignores everything after a `+` in addresses, so `stefanbogdanmda+sotest@gmail.com` lands in your real inbox but counts as a "new" email everywhere else. Use this.
+---
 
-1. Go to instagram.com and click **Sign up**.
-2. Use the `+`-trick email.
-3. Pick a unique handle — `cafe_test_arnhem` or similar. Doesn't need to be pretty.
-4. Use any password (save it in a password manager).
-5. Confirm the verification email Instagram sends.
+## Step 1 — Tommy creates a Facebook Page for his business
 
-**Expected outcome:** You're logged into a brand-new Instagram personal account. It currently has 0 posts and 0 followers — that's fine.
+> **Done by Tommy, 2 min.**
 
-## Step 3 — Convert the Instagram account to Business + link to the Page (5 min)
+Tommy needs to do this from his personal Facebook account.
 
-This is the step people most often get wrong. **Both the conversion AND the linking matter.** A converted-but-unlinked Business account is invisible to the Graph API.
+1. Log into facebook.com with his personal account.
+2. Left sidebar → **Pages** → **Create new Page**.
+3. Page name: **Tommy Culinair** (exactly as it should appear publicly).
+4. Category: pick the closest fit — for HoReCa, `Restaurant`, `Catering Service`, or `Personal Chef` all work. Pick from the suggestions Meta offers.
+5. Click **Create Page**.
+6. Skip the optional setup screens (cover photo, address, opening hours) — those can come later.
 
-You can do this either on the IG mobile app or instagram.com. Mobile is more reliable.
+**Expected outcome:** Tommy is on the new Page's admin view. Its URL contains a number like `facebook.com/profile.php?id=61555...`. That number is the **Page ID** — useful for debugging later. Have Tommy copy it and send it to you.
 
-1. On the new IG account, go to **Settings and privacy** → **Account type and tools** → **Switch to professional account**.
-2. Pick a category — `Café` works. Confirm.
-3. Choose **Business** (not Creator). Continue.
-4. When IG asks "Are you a business or creator?" — pick **Business**.
-5. **Critical step:** IG will ask you to **connect a Facebook Page**. Connect the `Café Test Arnhem` Page you created in Step 1. Log into your personal FB if prompted.
+**If Tommy doesn't have a personal Facebook account:** he needs one. Facebook Pages can only be managed by personal accounts — there's no workaround. Creating a personal account is free and takes a few minutes.
 
-If IG doesn't prompt for Page linking automatically: go to Settings → Account Center → Connected experiences → **Connect a Facebook account**, link your personal FB, then back in IG go to **Edit profile** → **Page** → pick the Café Test Arnhem Page.
+---
 
-**Expected outcome:** In your IG profile's "Edit profile" view, you should see "Page: Café Test Arnhem" listed. If you don't, the link didn't take — try again. The publishing pipeline literally cannot find your IG account otherwise.
+## Step 2 — Tommy links his Business Instagram to the new Page
 
-## Step 4 — Create a Meta Business Account (3 min)
+> **Done by Tommy, 5 min.** This is the step people most often get wrong. **Both the link AND the Business status matter.** A Business IG with no Page link is invisible to the Graph API.
 
-Skip this step if you somehow already have one. Otherwise:
+Easiest from the Instagram mobile app:
 
-1. Go to **business.facebook.com**.
-2. Click **Create account**.
-3. Business name: `Social AI` (this is yours, the operator, not the test café).
-4. Your name + work email (your real email is fine here).
-5. Confirm via email.
+1. Open Instagram → his Tommy Culinair business profile.
+2. **Settings and privacy** → **Account type and tools**. Confirm it says **Business** (not Creator, not Personal). If it doesn't, switch it.
+3. **Settings and privacy** → **Account Center** → **Connected experiences** → **Connect a Facebook account**. Log into his personal FB when prompted.
+4. Back in IG: **Edit profile** → scroll to **Page** → pick **Tommy Culinair**.
 
-**Expected outcome:** You're in the Meta Business Suite for Social AI. This is a *container* — it'll hold your Pages and Apps. You haven't added anything to it yet.
+**Expected outcome:** When Tommy opens **Edit profile** on his IG, the field labeled **Page** reads `Tommy Culinair`. Ask him to screenshot that screen and send it to you — that's your proof the link took.
 
-## Step 5 — Add the test Page to the Business Account (2 min)
+If that line is empty or shows a different Page, the link didn't stick. Most common cause: the IG account is on **Creator** not **Business**, or his personal FB and the Page belong to different accounts.
 
-1. In Business Suite, find **Business Settings** (cog icon, usually bottom-left).
-2. Go to **Accounts** → **Pages**.
-3. Click **Add** → **Add a Page**.
-4. Search for or paste the link to your Café Test Arnhem Page. Add it.
-5. Meta may ask you to confirm ownership via your personal FB — do that.
+---
 
-**Expected outcome:** The Café Test Arnhem Page now appears in Business Settings → Accounts → Pages.
+## Step 3 — You verify the App has the right products
 
-## Step 6 — Create the Meta Developer account (3 min)
+> **Done by you, 3 min.**
 
-1. Go to **developers.facebook.com**.
-2. Click **Get Started** in the top right.
-3. Accept the developer terms.
-4. Confirm via SMS or email.
+1. Go to developers.facebook.com → **My Apps** → open your `SocialAi` app (or whatever you named it — App ID is the one you wrote down when you created it).
+2. You'll land on the **Dashboard**. You're already "inside" the app — no separate open step needed.
+3. Scroll down to **Add products to your app** (or click **Add Product** in the left sidebar). At the bottom of that section there's a **My products** subsection showing what's already added.
 
-**Expected outcome:** You can now access **My Apps** in the top-right menu.
+Required products (the modern, post-2024 list — Meta has consolidated these):
 
-## Step 7 — Create the Meta App (5 min)
+- **Facebook Login for Business** — includes everything the old standalone "Pages API" product used to unlock (`pages_show_list`, `pages_manage_posts`, `pages_manage_metadata`, etc.)
+- **Instagram** — when adding, pick **Instagram Graph API** if it asks
 
-1. **My Apps** → **Create App**.
-2. App type: pick **Business**. (Other types won't give you Instagram Content Publishing — this is the one we need.)
-3. App name: `Social AI Dev`.
-4. App contact email: your real email.
-5. Business Account: select the `Social AI` Business Account you made in Step 4.
-6. Click **Create App** — Meta will ask for your FB password as confirmation.
+> **Note:** Older guides mention "Pages API" as a third product to add. It no longer exists as a separate tile in the Meta dev console — the permissions moved into Facebook Login for Business. If you can't find it, you're not missing anything; just confirm both products above are in your **My products** list.
 
-**Expected outcome:** You're now in the App Dashboard for Social AI Dev. The header shows the App is in **Development** mode. Note the **App ID** somewhere — we'll need it.
+For each missing one: click **Set up** on its tile, leave defaults, click through the confirmation screen.
 
-## Step 8 — Add the Graph API products (5 min)
+**Expected outcome:** Both products appear under **My products**.
 
-In the App Dashboard, look for a **Products** section in the left sidebar, or a "+ Add Product" button. Add these products one at a time:
+---
 
-1. **Facebook Login for Business** — leave default settings.
-2. **Pages API** — leave default settings.
-3. **Instagram** — when adding, pick "Instagram Graph API" if asked. Leave default settings.
+## Step 4 — Configure the OAuth redirect URI
 
-For each one, after adding, Meta will drop you in its config page. You don't need to configure anything — just click around to confirm it was added.
+> **Done by you, 2 min.**
 
-**Expected outcome:** All three products show up in the left sidebar under **Products**.
+This is the address Meta sends users back to after they grant access to your App. Social AI's OAuth callback lives at `/api/meta/callback`. Without whitelisting it here, the Connect button inside Social AI fails with a "URL Blocked" error.
 
-## Step 9 — Configure the OAuth redirect URI (2 min)
-
-This is the address that Meta sends users back to after they grant access to your App. Social AI's OAuth callback lives at `/api/meta/callback`, so we need to whitelist that exact URL in the App's settings. Without this step, the Connect button in Social AI will fail with a "URL Blocked" error.
-
-1. In the App Dashboard left sidebar, go to **Products** → **Facebook Login for Business** → **Settings** (or **Configuration**, depending on the UI version).
+1. App Dashboard sidebar → **Products** → **Facebook Login for Business** → **Settings** (sometimes labeled **Configuration**).
 2. Find the **Valid OAuth Redirect URIs** field.
 3. Paste these two URLs, one per line:
    - `http://localhost:3000/api/meta/callback` — for local dev
-   - `https://<your-production-domain>/api/meta/callback` — for production (you can leave this off until you have a real domain)
+   - `https://<your-production-domain>/api/meta/callback` — for production (leave off until you have a real domain)
 4. Save.
 
-**Expected outcome:** Both URLs appear in the field. When you eventually click Connect inside Social AI, Meta will redirect back to one of these — anything else gets blocked.
+**Expected outcome:** Both URLs appear in the field. When Tommy clicks Connect inside Social AI, Meta will redirect him to one of these — anything else gets blocked.
 
-## Step 10 — Add yourself as an Instagram tester (2 min)
+---
 
-This is the step that lets your real personal FB account act on the test setup while the App is in Development Mode.
+## Step 5 — Add Tommy as a tester
 
-1. In the App Dashboard left sidebar, find **App Roles** → **Roles**.
-2. Add your personal account as an **Administrator** (it probably already is, since you created the App).
-3. Then go to **Products** → **Instagram** → **API setup with Instagram Login** (or similar).
-4. There should be a section called **Add or remove Instagram testers**. Add your test IG account (`cafe_test_arnhem`) as a tester.
-5. **Accept the invitation:** log into the test IG account, go to Settings → Apps and Websites → **Tester Invites**, accept.
+> **Started by you, finished by Tommy. ~5 min wall-clock.**
 
-**Expected outcome:** The test IG account is now an accepted tester on the App.
+In Development Mode, only people you've explicitly added as testers can authorize the App. Tommy needs **two** kinds of access:
 
-## You're done with the required setup
+- **App-level tester** — so he can authorize the App in Dev Mode
+- **Instagram tester** — so his IG account is reachable by the Instagram Graph API
 
-If you got this far, you have everything Social AI needs to run the OAuth flow:
+Both invites need to be sent by you, and both have to be **accepted by Tommy** before anything works.
 
-- A Facebook Page + linked Instagram Business account
-- A Meta App in Development Mode with the right products, the redirect URI whitelisted, and you as an accepted tester
-- The App ID and App Secret from **App Dashboard → Settings → Basic** — these go into your `.env.local` as `META_APP_ID` and `META_APP_SECRET`
+### 5a. Add Tommy as an App tester (you)
 
-Skip straight to the smoke test for Plan #5a now. The remaining Step 11 below is **optional**.
+1. App Dashboard sidebar → **App Roles** → **Roles**.
+2. Click **Add People** → choose **Tester**.
+3. Enter Tommy's name or Facebook URL (you can search by name — he has to be findable on Facebook, which he is, since he just created a Page from his personal account).
+4. Send invite.
 
-## Step 11 — Get a long-lived access token manually (10 min, OPTIONAL)
+### 5b. Add Tommy's IG as an Instagram tester (you)
 
-> **Skip this step on your first time through.** Social AI's OAuth flow (Plan #5a) does all of this automatically when you click the Connect button inside the app. This step is kept for two reasons: (a) it explains *what* the OAuth flow is doing under the hood, useful when you debug a Meta error later; (b) if you ever need to test the Graph API directly without running the Social AI app, the manual token is how.
+1. Sidebar → **Products** → **Instagram** → look for a screen labeled **API setup**, **Instagram testers**, or **Roles** (Meta's been renaming this one).
+2. Find **Add or remove Instagram testers**.
+3. Enter Tommy's IG handle (get the exact handle from him — case-insensitive but no `@`).
+4. Send invite.
 
-This is the longest step. Read it through once before doing it.
+### 5c. Tommy accepts both invites (Tommy)
 
-### 11a. Open the Graph API Explorer
+Two notifications, two accept actions:
 
-1. Go to **developers.facebook.com/tools/explorer**.
-2. In the top right, set **Meta App** to `Social AI Dev`.
-3. Set **User or Page** to **User Token**.
-4. Click **Add a Permission** and add all of these (you'll need to click through several categories):
-   - `pages_show_list`
-   - `pages_read_engagement`
-   - `pages_manage_posts`
-   - `pages_manage_metadata`
-   - `business_management`
-   - `instagram_basic`
-   - `instagram_content_publish`
-5. Click **Generate Access Token**. Meta will pop up a permission dialog — accept everything, picking the Café Test Arnhem Page when asked which Page to grant access to.
-6. Copy the token that appears. **This is a short-lived (1-hour) user token.** Save it to a scratchpad — we'll trade it in for a long-lived one in a moment.
+- **Facebook tester invite:** Tommy opens his Facebook notifications, sees the invitation from Social AI Dev, clicks **Accept**.
+- **Instagram tester invite:** Tommy logs into the Tommy Culinair Instagram → Settings → **Apps and websites** → **Tester invites** → **Accept**.
 
-### 11b. Confirm the token sees the Page
+**Expected outcome:** Back on your side, the App Roles screen shows Tommy as an **Accepted** tester (not "Pending"), and the Instagram testers list shows his handle as Accepted too. If either says Pending, Tommy hasn't clicked through yet.
 
-In the Graph API Explorer, with that token still active:
-
-1. In the query field, type: `me/accounts`
-2. Click **Submit**.
-
-You should see a JSON response listing your Pages. Find the Café Test Arnhem entry and copy its `access_token` and `id` values. **That `access_token` is a Page Access Token — it's what we actually want to store.** A Page Access Token derived from a long-lived user token is effectively non-expiring.
-
-But wait — the user token is currently short-lived, so the Page token derived from it is also short-lived. We need to extend the user token first. Don't skip this.
-
-### 11c. Extend the user token to long-lived (60 days)
-
-You'll need your **App ID** and **App Secret**. Find both at:
-
-`App Dashboard → App Settings → Basic`
-
-The App Secret is hidden behind a "Show" button — click it, enter your password.
-
-⚠️ **Do not paste your App Secret anywhere it could be saved publicly.** Not in chat, not in a commit, not in a public note. We'll move it to environment variables when we build the code.
-
-Open a new browser tab and visit this URL (with the three placeholders replaced):
-
-```
-https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=YOUR_APP_ID&client_secret=YOUR_APP_SECRET&fb_exchange_token=YOUR_SHORT_LIVED_USER_TOKEN
-```
-
-The response is JSON with `access_token` and `expires_in`. The `expires_in` should be roughly 5,184,000 seconds = 60 days. **This is your long-lived user token.** Save it.
-
-### 11d. Re-derive the Page token from the long-lived user token
-
-Back in the Graph API Explorer:
-
-1. In the **Access Token** field at the top, paste the long-lived user token from 11c.
-2. Run `me/accounts` again.
-3. Copy the `access_token` from the Café Test Arnhem entry. **This is your long-lived Page Access Token.** Save it.
-
-### 11e. Find the linked Instagram Business Account ID
-
-Still in the Explorer, with the Page token from 11d (or still on the user token):
-
-1. Find your Page ID (from Step 1, or from the `id` field of the `me/accounts` response).
-2. Run: `YOUR_PAGE_ID?fields=instagram_business_account`
-3. Response will be:
-   ```json
-   {
-     "instagram_business_account": { "id": "17841..." },
-     "id": "YOUR_PAGE_ID"
-   }
-   ```
-4. Save the `instagram_business_account.id` value. **This is your Instagram Business Account ID** — the thing we POST IG content to.
-
-If `instagram_business_account` is missing from the response: your IG account isn't properly linked to the Page (back to Step 3). The most common cause is that the IG account is still "Personal" or "Creator" type instead of "Business".
+---
 
 ## What you walk away with — the required set
 
-After Step 10, you have everything Social AI needs:
+After Step 5 is fully accepted, you have everything Social AI needs:
 
-| Variable | Example | What it is |
+| Variable | Example | Where to find |
 |---|---|---|
-| `META_APP_ID` | `123456789012345` | Your Meta App's ID. From App Dashboard → Settings → Basic. |
-| `META_APP_SECRET` | `abc123...` | Your Meta App's Secret (keep private). Same screen as App ID. |
+| `META_APP_ID` | `123456789012345` | App Dashboard → Settings → Basic |
+| `META_APP_SECRET` | `abc123...` | Same screen. Hidden behind a "Show" button — enter your password to reveal. |
 
-Plus, configured inside the Meta App itself (not values you copy):
+Plus, configured *inside* the Meta App itself (not values you copy):
 
-- The Café Test Arnhem Page + linked Instagram Business account
-- The OAuth redirect URI `http://localhost:3000/api/meta/callback` whitelisted
-- Yourself accepted as a tester
+- Tommy Culinair Page + his Business IG linked to it
+- OAuth redirect URI `http://localhost:3000/api/meta/callback` whitelisted
+- Tommy accepted as both an App tester and an Instagram tester
 
-Add the two values above to `.env.local` along with the encryption key and the redirect URI:
+⚠️ **Do not paste your App Secret anywhere it could be saved publicly.** Not in chat, not in commits, not in shared notes. It goes in `.env.local`, which is gitignored.
+
+Add the values to `.env.local`:
 
 ```
 META_APP_ID=<your-app-id>
@@ -264,26 +199,150 @@ META_TOKEN_ENCRYPTION_KEY=<generate with: node -e "console.log(require('crypto')
 META_GRAPH_VERSION=v21.0
 ```
 
-Then start the dev server and run the 5a smoke test:
+---
+
+## Optional but recommended — Set yourself up for dry runs
+
+> **Done by you, ~5 min.** Strongly recommended before you involve Tommy.
+
+The goal here is to catch bugs in *your* code without burning Tommy's patience. You'll click **Connect** against a Page you own, hit any errors, fix them, repeat — and only call Tommy once the flow works clean.
+
+What you need:
+
+- Your own personal Facebook account ✅ (you have this)
+- A **throwaway Facebook Page** you create just for testing — name it whatever, `Stefan Test Page` is fine. Delete it later if you want.
+- Optional: a throwaway Instagram Business account linked to that Page, only if you want to verify the IG side too. If you skip this, the dry run only covers the Facebook half of the flow — the OAuth handshake, token exchange, encryption, and DB write. That's already 80% of what can break.
+
+Setup:
+
+1. **Create the throwaway Page** — same as Step 1, but on your own personal FB account. Name + category don't matter. Skip all the optional setup screens.
+2. **Add yourself as an App tester** — same as Step 5a, but enter your own name. Accept the invite on your Facebook notifications.
+3. *(Optional IG side)* If you want to test IG too: create a fresh IG account using the Gmail `+` trick (`stefanbogdanmda+dryrun@gmail.com` lands in your real inbox but counts as new everywhere else), switch it to Business, link it to your throwaway Page. Then add it as an Instagram tester (Step 5b) and accept.
+
+Now run the smoke test below using your own credentials first. When it works end to end on your throwaway Page, you know the code is solid — repeat with Tommy.
+
+---
+
+## Smoke test — does the full flow work end to end?
+
+Two ways to run this. The "dry run" version uses your own throwaway Page (set up above). The "real test" version uses Tommy's account. Do the dry run first.
+
+For either version:
 
 1. `npm run dev`
-2. Sign in as admin
-3. Go to `/admin/clients/<id>`
-4. Click **Connect Instagram / Facebook**
-5. Approve the Meta dialog
-6. Confirm the panel flips to "Connected" with your Page name + IG id
-7. In Drizzle Studio, verify the `meta_connections` row exists with an encrypted token (not the plaintext)
+2. Sign in as admin on Social AI.
+3. Create a client row in the admin UI for whoever you're testing with — yourself for the dry run, Tommy for the real test. Go to `/admin/clients/<that-client-id>`.
+4. Click **Connect Instagram / Facebook**.
+5. You'll be redirected to Meta. **You need to be logged into Facebook as the account that owns the target Page.** For the dry run that's you; for the real test that's Tommy (easiest: have him do it on his phone with screen-share).
+6. Approve the Meta consent dialog. Pick the correct Page when asked — your throwaway Page for the dry run, **Tommy Culinair** for the real test.
+7. Meta redirects back to Social AI. The panel should flip to **Connected**, showing the Page name and Instagram ID.
+8. In Drizzle Studio, open the `meta_connections` table. There should be a new row tied to the right `client_id`, with an encrypted `access_token` (gibberish, not plaintext) and the Page/IG IDs visible.
 
-Real clients (when you eventually onboard them) will go through the same OAuth flow — each one ends up with their own row in `meta_connections`.
+If anything fails, **screenshot the error before clicking away**. Meta errors are cryptic but specific — wrong fixes waste hours.
 
-## Optional sanity check — only if you did Step 11
+---
 
-If you went through Step 11 and have a Page Access Token in hand, you can verify it works using the Graph API Explorer:
+## Step 6 — Optional: manual token fetch via Graph API Explorer
 
-1. `me?fields=name` → should return `"Café Test Arnhem"`
+> **Skip this on your first time through.** Social AI's OAuth flow (Plan #5a) does all of this automatically. This step is kept for two reasons: (a) it explains what the OAuth flow is doing under the hood, useful when you debug Meta errors; (b) if you ever need to hit the Graph API directly without running Social AI, the manual token is how.
+
+### 6a. Open the Graph API Explorer
+
+1. Go to developers.facebook.com/tools/explorer.
+2. Top right: set **Meta App** to `Social AI Dev`.
+3. Set **User or Page** to **User Token**.
+4. Click **Add a Permission** and add all of these:
+   - `pages_show_list`
+   - `pages_read_engagement`
+   - `pages_manage_posts`
+   - `pages_manage_metadata`
+   - `business_management`
+   - `instagram_basic`
+   - `instagram_content_publish`
+5. Click **Generate Access Token**. Meta will pop up a permission dialog — accept everything, picking the Tommy Culinair Page when asked.
+6. Copy the token. **This is a short-lived (1-hour) user token.** Save it to a scratchpad — we'll trade it for a long-lived one in a moment.
+
+### 6b. Confirm the token sees the Page
+
+In the Graph API Explorer, with that token active:
+
+1. In the query field, type: `me/accounts`
+2. Click **Submit**.
+
+You should see JSON listing Pages. Find the Tommy Culinair entry and copy its `access_token` and `id`. **That `access_token` is a Page Access Token — what we actually want to store.** A Page Access Token derived from a long-lived user token is effectively non-expiring.
+
+But the user token is currently short-lived, so the derived Page token is also short-lived. We need to extend the user token first.
+
+### 6c. Extend the user token to long-lived (60 days)
+
+Find **App ID** and **App Secret** in App Dashboard → Settings → Basic. The Secret is hidden — click **Show**, enter your password.
+
+In a browser tab, visit (with placeholders replaced):
+
+```
+https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=YOUR_APP_ID&client_secret=YOUR_APP_SECRET&fb_exchange_token=YOUR_SHORT_LIVED_USER_TOKEN
+```
+
+The response is JSON with `access_token` and `expires_in`. `expires_in` should be ~5,184,000 seconds = 60 days. **This is your long-lived user token.** Save it.
+
+### 6d. Re-derive the Page token from the long-lived user token
+
+Back in the Graph API Explorer:
+
+1. Paste the long-lived user token from 6c into the **Access Token** field.
+2. Run `me/accounts` again.
+3. Copy the `access_token` from the Tommy Culinair entry. **This is your long-lived Page Access Token.** Save it.
+
+### 6e. Find the linked Instagram Business Account ID
+
+Still in the Explorer:
+
+1. Find Tommy's Page ID (from Step 1, or the `id` field in `me/accounts`).
+2. Run: `YOUR_PAGE_ID?fields=instagram_business_account`
+3. Response:
+   ```json
+   {
+     "instagram_business_account": { "id": "17841..." },
+     "id": "YOUR_PAGE_ID"
+   }
+   ```
+4. Save `instagram_business_account.id` — **this is the Instagram Business Account ID** we POST IG content to.
+
+If `instagram_business_account` is missing from the response: Tommy's IG isn't properly linked to the Page (back to Step 2). Most common cause: IG is still **Creator** instead of **Business**, or the personal FB used in IG's Account Center is different from the one that owns the Page.
+
+---
+
+## Optional sanity check — only if you did Step 6
+
+With a Page Access Token in hand, verify it works in the Graph API Explorer:
+
+1. `me?fields=name` → should return `"Tommy Culinair"`
 2. `me?fields=instagram_business_account` → should return the IG ID
 3. `me/feed?fields=id&limit=1` → should return `{"data":[]}` (no posts yet) — proves the token can read the Page's feed
 
-If anything errors or doesn't match, **screenshot the error** — most Meta errors are cryptic but specific, and the wrong fix wastes hours later.
+If anything errors, **screenshot the error** — most Meta errors are cryptic but specific, and the wrong fix wastes hours.
+
+---
+
+## Send this to Tommy
+
+Copy-paste the block below to Tommy (translate to Dutch as needed — your call on tone). It tells him exactly what's on his plate, in order.
+
+> Hé Tommy — voor het testen van Social AI met jouw zaak heb ik drie kleine dingen van je nodig. Samen ongeveer 10 minuten, allemaal op je telefoon.
+>
+> **1) Maak een Facebook Page voor Tommy Culinair**
+> Op facebook.com → linker zijbalk → **Pages** → **Create new Page**. Naam: "Tommy Culinair". Categorie: kies wat het dichtst bij je werk ligt (Restaurant, Catering, Personal Chef). Klik op Create. De rest (foto, adres, openingstijden) kun je later doen. Stuur me daarna de link naar de Page.
+>
+> **2) Koppel je Instagram-account aan die Page**
+> Open Instagram-app → jouw Tommy Culinair profiel → **Instellingen en privacy** → **Accounttype en tools** → check dat het op **Business** staat (niet Creator). Dan: **Bewerk profiel** → onderaan zie je **Page** — kies "Tommy Culinair". Maak een screenshot van dat scherm en stuur 'm naar mij.
+>
+> **3) Accepteer de twee uitnodigingen die ik je stuur**
+> Je krijgt straks twee uitnodigingen om "tester" te worden voor de Social AI app:
+> - Eén op Facebook (notificatie) — gewoon op **Accepteer** klikken.
+> - Eén op Instagram — in IG-app: **Instellingen** → **Apps en websites** → **Tester-uitnodigingen** → accepteer.
+>
+> Klaar. Daarna kan ik aan de gang met de eerste echte posts voor je zaak.
+
+---
 
 Welcome to the world of social media APIs. It's not always like this, but the first time it always is.
