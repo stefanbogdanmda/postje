@@ -1,7 +1,9 @@
 import type { Post } from "@/lib/posts/types"
+import FlagButton from "./flag-button"
 
 interface PublishedPostsProps {
   posts: Post[]
+  flaggedPostIds?: ReadonlySet<string>
 }
 
 function formatDutchDate(dateStr: string): string {
@@ -18,7 +20,7 @@ function formatPlatformLabel(platform: "instagram" | "facebook"): string {
   return platform === "instagram" ? "Instagram" : "Facebook"
 }
 
-export default function PublishedPosts({ posts }: PublishedPostsProps) {
+export default function PublishedPosts({ posts, flaggedPostIds = new Set() }: PublishedPostsProps) {
   if (posts.length === 0) {
     return (
       <section>
@@ -62,10 +64,16 @@ export default function PublishedPosts({ posts }: PublishedPostsProps) {
               </p>
             </div>
 
-            {/* Metrics stub -- Meta API not wired yet */}
-            <span className="text-xs text-[var(--border-medium)] ml-4 whitespace-nowrap">
-              &mdash; likes
-            </span>
+            <div className="flex items-center gap-3 ml-4 shrink-0">
+              <FlagButton
+                postId={post.id}
+                alreadyFlagged={flaggedPostIds.has(post.id)}
+              />
+              {/* Metrics stub -- Meta API not wired yet */}
+              <span className="text-xs text-[var(--border-medium)] whitespace-nowrap">
+                &mdash; likes
+              </span>
+            </div>
           </div>
         ))}
       </div>
