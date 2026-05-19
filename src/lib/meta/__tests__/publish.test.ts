@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { publishToFacebook, publishToInstagram } from "../publish"
+import { publishToFacebook, publishToInstagram, publishPostToMeta } from "../publish"
+import { createTestDb, seedTestClient, seedTestPhoto, seedMetaConnection, type TestDb } from "@/test/db"
+import { posts, publishAttempts } from "@/db/schema"
+import { eq } from "drizzle-orm"
 
 beforeEach(() => {
   process.env.META_GRAPH_VERSION = "v21.0"
@@ -120,5 +123,139 @@ describe("publishToInstagram", () => {
       )
     ).rejects.toThrow(/image fetch failed/)
     expect(step).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────
+// Orchestrator tests — real DB (PGlite), mocked HTTP
+// ─────────────────────────────────────────────────────────
+
+const CLIENT_ID = "test-client-001"
+const ENC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+let db: TestDb
+
+async function seedApprovedPost(opts: {
+  platform: "instagram" | "facebook"
+  withPhoto: boolean
+  content?: string
+}) {
+  const photoId = opts.withPhoto ? "photo-1" : null
+  if (photoId) await seedTestPhoto(db, CLIENT_ID, photoId)
+  await db.insert(posts).values({
+    clientId: CLIENT_ID,
+    platform: opts.platform,
+    scheduledDate: "2026-05-12",
+    status: "approved",
+    content: opts.content ?? "hello",
+    reasoning: "test",
+    photoId,
+    publishAt: new Date(),
+    approvedAt: new Date(),
+  })
+  const row = await db.select().from(posts).where(eq(posts.clientId, CLIENT_ID))
+  return row[0]
+}
+
+describe("publishPostToMeta — orchestrator", () => {
+  beforeEach(async () => {
+    process.env.META_TOKEN_ENCRYPTION_KEY = ENC_KEY
+    process.env.META_GRAPH_VERSION = "v21.0"
+    db = await createTestDb()
+    await seedTestClient(db, CLIENT_ID)
+    await seedMetaConnection(db, CLIENT_ID, {
+      accessTokenPlaintext: "PAGE_TOKEN_PLAINTEXT",
+    })
+  })
+
+  it("returns guard-failed when the post is not in 'approved' status", async () => {
+    await db.insert(posts).values({
+      clientId: CLIENT_ID,
+      platform: "instagram",
+      scheduledDate: "2026-05-12",
+      status: "draft",
+      content: "x",
+      reasoning: "x",
+    })
+    const draft = (await db.select().from(posts))[0]
+    const result = await publishPostToMeta(db, draft.id, "admin-1", vi.fn())
+    expect(result.success).toBe(false)
+    expect(result.guardFailure).toBe("not-approved")
+    const attempts = await db.select().from(publishAttempts)
+    expect(attempts).toHaveLength(0)
+  })
+
+  it("returns guard-failed when the post has no meta connection", async () => {
+    const { metaConnections } = await import("@/db/schema")
+    await db.delete(metaConnections)
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const result = await publishPostToMeta(db, post.id, "admin-1", vi.fn())
+    expect(result.success).toBe(false)
+    expect(result.guardFailure).toBe("no-connection")
+  })
+
+  it("publishes a Facebook text post and updates state on success", async () => {
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "FB_FEED_1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    )
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(true)
+    expect(result.metaPostId).toBe("FB_FEED_1")
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("published")
+    expect(updated.publishedAt).toBeInstanceOf(Date)
+    expect(updated.publishError).toBeNull()
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0].success).toBe(true)
+    expect(attempts[0].metaPostId).toBe("FB_FEED_1")
+    expect(attempts[0].attemptedBy).toBe("admin-1")
+    expect(typeof attempts[0].requestDurationMs).toBe("number")
+  })
+
+  it("records a failure and flips status to 'failed' when Meta returns an error", async () => {
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ error: { message: "Token expired", code: 190 } }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      )
+    )
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(false)
+    expect(result.errorClass).toBe("permanent-token")
+    expect(result.errorMessage).toMatch(/Token expired/)
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("failed")
+    expect(updated.publishError).toMatch(/Token expired/)
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0].success).toBe(false)
+    expect(attempts[0].errorClass).toBe("permanent-token")
+  })
+
+  it("publishes an Instagram post via the two-step flow", async () => {
+    const post = await seedApprovedPost({ platform: "instagram", withPhoto: true })
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "CONTAINER" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "IG_FINAL" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+    expect(result.success).toBe(true)
+    expect(result.metaPostId).toBe("IG_FINAL")
   })
 })
