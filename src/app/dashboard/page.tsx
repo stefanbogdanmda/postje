@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { db } from "@/db"
-import { eq } from "drizzle-orm"
-import { clients } from "@/db/schema"
+import { eq, inArray } from "drizzle-orm"
+import { clients, postFlags } from "@/db/schema"
 import {
   getPostsByDateRange,
   markPostsAsSeen,
@@ -53,6 +53,20 @@ export default async function DashboardPage() {
     await markPostsAsSeen(db, unseenPendingIds, client.id)
   }
 
+  // Look up which published posts have already been flagged by this client
+  const publishedPostIds = publishedPosts.map((p) => p.id)
+  const flaggedPostIds: ReadonlySet<string> =
+    publishedPostIds.length > 0
+      ? new Set(
+          (
+            await db
+              .select({ postId: postFlags.postId })
+              .from(postFlags)
+              .where(inArray(postFlags.postId, publishedPostIds))
+          ).map((r) => r.postId)
+        )
+      : new Set()
+
   const pendingDeletion = await getActiveDeletionRequest(db, session.user.id)
 
   return (
@@ -62,7 +76,7 @@ export default async function DashboardPage() {
       )}
       <PendingPosts posts={pendingPosts} />
       <UpcomingPosts posts={approvedPosts} />
-      <PublishedPosts posts={publishedPosts} />
+      <PublishedPosts posts={publishedPosts} flaggedPostIds={flaggedPostIds} />
     </div>
   )
 }
