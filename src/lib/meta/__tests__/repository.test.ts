@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach, afterAll } from "vitest"
 import { createTestDb, seedTestClient, type TestDb } from "@/test/db"
 import {
   upsertConnection,
   getConnectionByClient,
   deleteConnectionByClient,
+  getDecryptedConnectionByClient,
+  insertPublishAttempt,
 } from "../repository"
+import { encryptToken } from "../crypto"
+import * as schema from "@/db/schema"
 
 let db: TestDb
 const CLIENT_ID = "test-client-001"
@@ -87,5 +91,90 @@ describe("deleteConnectionByClient", () => {
 
   it("is a no-op when no row exists", async () => {
     await expect(deleteConnectionByClient(db, CLIENT_ID)).resolves.not.toThrow()
+  })
+})
+
+const ORIGINAL_ENCRYPTION_KEY = process.env.META_TOKEN_ENCRYPTION_KEY
+
+describe("getDecryptedConnectionByClient", () => {
+  beforeEach(() => {
+    process.env.META_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64")
+  })
+
+  afterAll(() => {
+    process.env.META_TOKEN_ENCRYPTION_KEY = ORIGINAL_ENCRYPTION_KEY
+  })
+
+  it("returns null when no connection exists", async () => {
+    const result = await getDecryptedConnectionByClient(db, CLIENT_ID)
+    expect(result).toBeNull()
+  })
+
+  it("returns the connection with decrypted token", async () => {
+    const encrypted = encryptToken("real-page-token-xyz")
+    await upsertConnection(db, makeInput({ encryptedAccessToken: encrypted }))
+
+    const result = await getDecryptedConnectionByClient(db, CLIENT_ID)
+    expect(result).not.toBeNull()
+    expect(result!.accessToken).toBe("real-page-token-xyz")
+    expect(result!.pageId).toBe("PAGE_1")
+    expect(result!.instagramBusinessId).toBe("IG_1")
+  })
+})
+
+describe("insertPublishAttempt", () => {
+  it("writes a success attempt row", async () => {
+    const postId = "post-1"
+    await db.insert(schema.posts).values({
+      id: postId,
+      clientId: CLIENT_ID,
+      platform: "facebook",
+      scheduledDate: "2026-05-20",
+      status: "approved",
+      content: "Hello",
+      reasoning: "test",
+    })
+
+    await insertPublishAttempt(db, {
+      postId,
+      attemptedBy: "user-admin",
+      success: true,
+      metaPostId: "META_POST_99",
+      requestDurationMs: 250,
+    })
+
+    const rows = await db.select().from(schema.publishAttempts)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].success).toBe(true)
+    expect(rows[0].metaPostId).toBe("META_POST_99")
+  })
+
+  it("writes a failure attempt row with error fields", async () => {
+    const postId = "post-2"
+    await db.insert(schema.posts).values({
+      id: postId,
+      clientId: CLIENT_ID,
+      platform: "instagram",
+      scheduledDate: "2026-05-21",
+      status: "approved",
+      content: "Hi",
+      reasoning: "test",
+    })
+
+    await insertPublishAttempt(db, {
+      postId,
+      attemptedBy: "user-admin",
+      success: false,
+      errorClass: "permanent-content",
+      errorCode: "100",
+      errorMessage: "Invalid image URL",
+      requestDurationMs: 180,
+    })
+
+    const rows = await db.select().from(schema.publishAttempts)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].success).toBe(false)
+    expect(rows[0].errorClass).toBe("permanent-content")
+    expect(rows[0].errorMessage).toBe("Invalid image URL")
   })
 })

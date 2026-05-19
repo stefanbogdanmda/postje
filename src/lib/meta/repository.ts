@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm"
+import { eq, desc } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
+import { decryptToken } from "./crypto"
 
 type Db = PgDatabase<
   PgQueryResultHKT,
@@ -99,4 +100,84 @@ export async function deleteConnectionByClient(
   await db
     .delete(schema.metaConnections)
     .where(eq(schema.metaConnections.clientId, clientId))
+}
+
+export interface DecryptedConnection {
+  id: string
+  clientId: string
+  pageId: string
+  pageName: string
+  instagramBusinessId: string | null
+  accessToken: string
+  grantedScopes: string
+}
+
+/**
+ * Read the connection for a client and decrypt its token. Returns null
+ * if no row exists. Throws if decryption fails (tampered or wrong key).
+ */
+export async function getDecryptedConnectionByClient(
+  db: Db,
+  clientId: string
+): Promise<DecryptedConnection | null> {
+  const connection = await getConnectionByClient(db, clientId)
+  if (!connection) return null
+  return {
+    id: connection.id,
+    clientId: connection.clientId,
+    pageId: connection.pageId,
+    pageName: connection.pageName,
+    instagramBusinessId: connection.instagramBusinessId,
+    accessToken: decryptToken(connection.encryptedAccessToken),
+    grantedScopes: connection.grantedScopes,
+  }
+}
+
+export interface PublishAttemptInput {
+  postId: string
+  attemptedBy: string
+  success: boolean
+  metaPostId?: string | null
+  errorClass?: "transient" | "permanent-token" | "permanent-content" | "unknown" | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  requestDurationMs?: number | null
+}
+
+/**
+ * Append a row to `publish_attempts`. Caller is responsible for also
+ * updating the denormalized fields on `posts` (status, publishedAt,
+ * publishError) — those are atomic UPDATE statements done elsewhere.
+ */
+export async function insertPublishAttempt(
+  db: Db,
+  input: PublishAttemptInput
+): Promise<void> {
+  await db.insert(schema.publishAttempts).values({
+    postId: input.postId,
+    attemptedBy: input.attemptedBy,
+    success: input.success,
+    metaPostId: input.metaPostId ?? null,
+    errorClass: input.errorClass ?? null,
+    errorCode: input.errorCode ?? null,
+    errorMessage: input.errorMessage ?? null,
+    requestDurationMs: input.requestDurationMs ?? null,
+  })
+}
+
+/**
+ * Fetch the most recent attempt for a post, for surfacing the latest
+ * error message on the queue page.
+ */
+export async function getMostRecentAttemptForPost(
+  db: Db,
+  postId: string
+): Promise<typeof schema.publishAttempts.$inferSelect | null> {
+  const rows = await db
+    .select()
+    .from(schema.publishAttempts)
+    .where(eq(schema.publishAttempts.postId, postId))
+    .orderBy(desc(schema.publishAttempts.attemptedAt))
+    .limit(1)
+  return rows[0] ?? null
 }
