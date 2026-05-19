@@ -57,6 +57,14 @@ export const clients = pgTable("clients", {
   updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
+  timezone: text("timezone").notNull().default("Europe/Amsterdam"),
+  toneOfVoice: text("toneOfVoice"),
+  targetCustomers: text("targetCustomers"),
+  brandPersonality: text("brandPersonality"),
+  bannedPhrases: jsonb("bannedPhrases").$type<string[]>().notNull().default([]),
+  examplePosts: jsonb("examplePosts").$type<string[]>().notNull().default([]),
+  calibrationStartDate: timestamp("calibrationStartDate", { withTimezone: true, mode: "date" }),
+  publishMode: text("publishMode", { enum: ["manual", "auto"] }).notNull().default("auto"),
 })
 
 // ──────────────────────────────────────────────
@@ -308,4 +316,31 @@ export const publishAttempts = pgTable(
     requestDurationMs: integer("requestDurationMs"),
   },
   (t) => [index("publish_attempts_post_idx").on(t.postId)]
+)
+
+// ──────────────────────────────────────────────
+// postFlags — client-reported issues on published posts.
+// Flag button on published posts alerts Stefan immediately.
+// ──────────────────────────────────────────────
+export const postFlags = pgTable(
+  "post_flags",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    postId: text("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    clientId: text("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    reason: text("reason"),
+    flaggedAt: timestamp("flaggedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    resolvedAt: timestamp("resolvedAt", { withTimezone: true, mode: "date" }),
+    resolvedBy: text("resolvedBy"),
+  },
+  (t) => [index("post_flags_post_idx").on(t.postId)]
 )
