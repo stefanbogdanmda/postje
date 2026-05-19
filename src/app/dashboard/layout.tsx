@@ -4,6 +4,7 @@ import { db } from "@/db"
 import { eq } from "drizzle-orm"
 import { clients } from "@/db/schema"
 import SignOutButton from "@/components/sign-out-button"
+import Link from "next/link"
 
 export default async function DashboardLayout({
   children,
@@ -39,7 +40,19 @@ export default async function DashboardLayout({
               {client.businessName}
             </p>
           </div>
-          <SignOutButton label="Log uit" />
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <Link
+              href="/dashboard/account"
+              style={{
+                fontSize: "13px",
+                color: "var(--text-muted, #737373)",
+                textDecoration: "none",
+              }}
+            >
+              Account
+            </Link>
+            <SignOutButton label="Log uit" />
+          </div>
         </div>
       </header>
 
