@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
@@ -6,6 +7,10 @@ import { eq } from "drizzle-orm"
 import { generateOAuthState } from "@/lib/meta/oauth-state"
 import { buildAuthUrl } from "@/lib/meta/oauth"
 import { rateLimitRequest } from "@/lib/request-rate-limit"
+
+const querySchema = z.object({
+  clientId: z.string().min(1, "clientId is required"),
+})
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await auth()
@@ -20,10 +25,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (rateLimited) return rateLimited
 
   const url = new URL(req.url)
-  const clientId = url.searchParams.get("clientId")
-  if (!clientId) {
+  const params = querySchema.safeParse({ clientId: url.searchParams.get("clientId") })
+  if (!params.success) {
     return NextResponse.json({ error: "clientId is required" }, { status: 400 })
   }
+  const { clientId } = params.data
 
   const rows = await db
     .select({ id: clients.id })

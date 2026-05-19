@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
 import { users } from "@/db/schema"
@@ -6,6 +7,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { del } from "@vercel/blob"
 import { deleteUserAccount } from "@/lib/account/delete"
 import { rateLimitRequest } from "@/lib/request-rate-limit"
+import { parseBody } from "@/lib/validation"
+
+const deleteUserSchema = z.object({
+  userId: z.string().min(1, "userId is required"),
+})
 
 export async function POST(request: NextRequest) {
   const session = await auth()
@@ -16,15 +22,9 @@ export async function POST(request: NextRequest) {
   const rateLimited = await rateLimitRequest(request, "admin-delete-user", 5, 60_000)
   if (rateLimited) return rateLimited
 
-  const body = await request.json()
-  const { userId } = body as { userId: string }
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: "userId is required" },
-      { status: 400 }
-    )
-  }
+  const parsed = await parseBody(request, deleteUserSchema)
+  if ("error" in parsed) return parsed.error
+  const { userId } = parsed.data
 
   const userRows = await db
     .select({ role: users.role })
