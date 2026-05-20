@@ -24,7 +24,7 @@ export default async function WelcomePage() {
     }}>
       <div style={{ maxWidth: "480px", textAlign: "center" }}>
         <h1 style={{ fontSize: "28px", marginBottom: "16px" }}>
-          Welkom bij Social AI
+          Welkom bij Postje
         </h1>
         <p style={{ color: "#666", lineHeight: 1.6, marginBottom: "32px" }}>
           Fijn dat je er bent! Je account is klaar.
