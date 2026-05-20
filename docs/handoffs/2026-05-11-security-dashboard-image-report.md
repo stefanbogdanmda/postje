@@ -2,7 +2,7 @@
 
 ## Summary
 
-This report captures the work done on May 11, 2026 to harden the Social AI app, fix post workflow bugs, add generated Cafe de Hoek images, and make those images visible in the local dashboard.
+This report captures the work done on May 11, 2026 to harden the Postje app, fix post workflow bugs, add generated Cafe de Hoek images, and make those images visible in the local dashboard.
 
 The main goals were:
 

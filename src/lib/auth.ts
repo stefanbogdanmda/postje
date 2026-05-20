@@ -49,12 +49,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await resendClient.emails.send({
           from: EMAIL_FROM,
           to: email,
-          subject: "Je inloglink voor Social AI",
+          subject: "Je inloglink voor Postje",
           html: `
             <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #1a1a1a;">Social AI</h2>
+              <h2 style="color: #1a1a1a;">Postje</h2>
               <p>Hallo!</p>
-              <p>Klik op de onderstaande knop om in te loggen bij Social AI:</p>
+              <p>Klik op de onderstaande knop om in te loggen bij Postje:</p>
               <p style="text-align: center; margin: 32px 0;">
                 <a href="${url}"
                    style="background-color: #1a1a1a; color: #ffffff; padding: 12px 32px;

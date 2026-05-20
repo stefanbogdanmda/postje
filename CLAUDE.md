@@ -1,14 +1,14 @@
-# CLAUDE.md — Social AI
+# CLAUDE.md — Postje
 
 ## 1. Project Overview
 
-Social AI is a SaaS platform that runs social media for small businesses. Clients sign up, get their own account, and the system generates posts for their Instagram and Facebook accounts. Clients review each post individually — approving or rejecting one at a time. Reviews happen on a weekly rhythm, but approval decisions are per-post, not per-batch.
+Postje is a SaaS platform that runs social media for small businesses. Clients sign up, get their own account, and the system generates posts for their Instagram and Facebook accounts. Clients review each post individually — approving or rejecting one at a time. Reviews happen on a weekly rhythm, but approval decisions are per-post, not per-batch.
 
 The system publishes approved posts automatically.
 
-The owner operates Social AI as a one-person agency. The owner has a separate dashboard above all clients for monitoring, retuning, and support.
+The owner operates Postje as a one-person agency. The owner has a separate dashboard above all clients for monitoring, retuning, and support.
 
-This is a fresh greenfield project. Three earlier prototypes exist (Zeven, Efeze, Klein Canada) but they are reference material only — Social AI does not import their code.
+This is a fresh greenfield project. Three earlier prototypes exist (Zeven, Efeze, Klein Canada) but they are reference material only — Postje does not import their code.
 
 The full product specification lives in `docs/social-ai-spec.md`. Read that document before making any product or architectural decision.
 
@@ -57,7 +57,7 @@ Clients log in by clicking a link sent to their email. No passwords. Sessions la
 
 ## 4. Budget (Build Phase)
 
-Until Social AI has its first paying client, the project runs on free tiers and pay-as-you-go services only. No new monthly subscriptions.
+Until Postje has its first paying client, the project runs on free tiers and pay-as-you-go services only. No new monthly subscriptions.
 
 Currently paid:
 - Claude Code Max — the developer's build tool
@@ -116,7 +116,7 @@ Claude explains technical concepts before using them. The developer asks when so
 ### File Structure
 
 The project follows Next.js conventions. The main folders are:
-social-ai/
+postje/
 ├── app/              # Pages and routes (what users see)
 ├── components/       # Reusable pieces of UI (buttons, forms, cards)
 ├── lib/              # Shared logic (database, auth, Claude API calls)
@@ -213,7 +213,7 @@ Before adding a new dependency, library, or service, Claude explains what it doe
 React's escaping, Drizzle's parameterized queries, HTTPS, HttpOnly cookies — these defaults exist for a reason. Claude does not disable them without flagging the risk first.
 
 ### Never write Dutch communication in formal/corporate tone
-The brand voice for Social AI itself is friendly, warm, conversational. No corporate Dutch, no aggressive sales language.
+The brand voice for Postje itself is friendly, warm, conversational. No corporate Dutch, no aggressive sales language.
 
 ### Never proceed when something is fuzzy
 If the developer agrees to something quickly without clear understanding, Claude pauses and checks. If a plan is vague, Claude asks for specifics before writing code.

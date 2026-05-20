@@ -36,7 +36,7 @@ export async function exportMyDataAction(): Promise<ExportResult> {
     const jsonBlob = JSON.stringify(data, null, 2)
     const date = new Date().toISOString().slice(0, 10)
     const clientPart = data.client?.id ?? session.user.id
-    const filename = `social-ai-export-${clientPart}-${date}.json`
+    const filename = `postje-export-${clientPart}-${date}.json`
     return { success: true, jsonBlob, filename }
   } catch (error: unknown) {
     const message =

@@ -1,4 +1,4 @@
-# Production Readiness Report — Social AI
+# Production Readiness Report — Postje
 
 > **Date:** 2026-05-18
 > **Compiled by:** Coordinator 2 (swarm consolidation)
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Social AI has a **solid architectural foundation** — clean schema with proper tenant isolation, AES-256-GCM encrypted token storage, invite-only authentication, repository pattern for data access, and 21 test files covering critical business logic. The codebase is well-organized and follows good patterns for a v1 product.
+Postje has a **solid architectural foundation** — clean schema with proper tenant isolation, AES-256-GCM encrypted token storage, invite-only authentication, repository pattern for data access, and 21 test files covering critical business logic. The codebase is well-organized and follows good patterns for a v1 product.
 
 However, the project is **not yet production-ready**. The most significant gap is the **missing publisher engine** — the system can generate, review, and approve posts, but cannot publish them to Instagram or Facebook. This is the product's core value proposition.
 

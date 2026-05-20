@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add magic link authentication to Social AI using Auth.js, Resend, and Drizzle so clients and the admin can log in via email.
+**Goal:** Add magic link authentication to Postje using Auth.js, Resend, and Drizzle so clients and the admin can log in via email.
 
 **Architecture:** Auth.js v5 with the Drizzle adapter handles token generation, hashing, session management, and cookie security. Resend delivers the magic link emails. Middleware protects routes and enforces role-based access. A seed script bootstraps the admin account.
 
@@ -399,12 +399,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await resendClient.emails.send({
           from: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
           to: email,
-          subject: "Je inloglink voor Social AI",
+          subject: "Je inloglink voor Postje",
           html: `
             <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #1a1a1a;">Social AI</h2>
+              <h2 style="color: #1a1a1a;">Postje</h2>
               <p>Hallo!</p>
-              <p>Klik op de onderstaande knop om in te loggen bij Social AI:</p>
+              <p>Klik op de onderstaande knop om in te loggen bij Postje:</p>
               <p style="text-align: center; margin: 32px 0;">
                 <a href="${url}"
                    style="background-color: #1a1a1a; color: #ffffff; padding: 12px 32px;
@@ -670,7 +670,7 @@ export default function LoginPage() {
     }}>
       <div style={{ maxWidth: "400px", width: "100%" }}>
         <h1 style={{ fontSize: "24px", marginBottom: "8px" }}>
-          Social AI
+          Postje
         </h1>
         <p style={{ color: "#666", marginBottom: "32px" }}>
           Voer je e-mailadres in om in te loggen.
@@ -787,7 +787,7 @@ export default async function WelcomePage() {
     }}>
       <div style={{ maxWidth: "480px", textAlign: "center" }}>
         <h1 style={{ fontSize: "28px", marginBottom: "16px" }}>
-          Welkom bij Social AI
+          Welkom bij Postje
         </h1>
         <p style={{ color: "#666", lineHeight: 1.6, marginBottom: "32px" }}>
           Fijn dat je er bent! Je account is klaar.
@@ -1368,7 +1368,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Social AI",
+  title: "Postje",
   description: "Social media management for small businesses",
 }
 
@@ -1444,7 +1444,7 @@ Test these scenarios in order:
 
 1. **Visit `http://localhost:3000`** — should redirect to `/login`
 2. **Enter your admin email** — should show "Controleer je e-mail" message
-3. **Check your email** — should receive a Dutch magic link email from Social AI
+3. **Check your email** — should receive a Dutch magic link email from Postje
 4. **Click the magic link** — should land on `/admin` (since you're admin)
 5. **Visit `/dashboard`** — should work (you have a valid session)
 6. **Visit `/admin`** — should show user list with your admin account

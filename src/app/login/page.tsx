@@ -76,7 +76,7 @@ export default function LoginPage() {
     }}>
       <div style={{ maxWidth: "400px", width: "100%" }}>
         <h1 style={{ fontSize: "24px", marginBottom: "8px" }}>
-          Social AI
+          Postje
         </h1>
         <p style={{ color: "#666", marginBottom: "32px" }}>
           Voer je e-mailadres in om in te loggen.

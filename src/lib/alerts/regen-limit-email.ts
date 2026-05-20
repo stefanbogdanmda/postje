@@ -54,7 +54,7 @@ export function composeRegenLimitEmail(
         </a>
       </p>
       <p style="color: #666; font-size: 13px; margin: 0;">
-        Deze melding is automatisch verstuurd door Social AI. Eén keer per post — er volgt geen herhaling.
+        Deze melding is automatisch verstuurd door Postje. Eén keer per post — er volgt geen herhaling.
       </p>
     </div>
   `

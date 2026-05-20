@@ -1,8 +1,8 @@
-# Social AI — Production Readiness Plan
+# Postje — Production Readiness Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Take Social AI from "happy path works" to "ready for the first paying client" — closing every critical, high-priority, and medium-priority gap identified in the 2026-05-18 production readiness report.
+**Goal:** Take Postje from "happy path works" to "ready for the first paying client" — closing every critical, high-priority, and medium-priority gap identified in the 2026-05-18 production readiness report.
 
 **Architecture:** Five sequential phases, each producing working, testable software. Phase 1 (security hardening) is fully detailed below. Phase 2 (publisher engine) is already detailed in `docs/superpowers/plans/2026-05-12-publisher-engine.md`. Phases 3-5 are scoped at task level and will be expanded into full plans when we reach them.
 
@@ -60,7 +60,7 @@ Phases 3 and 4 can run in parallel after Phase 2 lands.
 
 ### Task 1: Add security headers to `next.config.ts`
 
-**What this does in plain English:** When someone's browser loads a page from Social AI, the server sends back invisible instructions called "headers" that tell the browser security rules — like "don't let other websites embed this page in a frame" or "only load scripts from trusted sources." Right now Social AI sends zero security headers.
+**What this does in plain English:** When someone's browser loads a page from Postje, the server sends back invisible instructions called "headers" that tell the browser security rules — like "don't let other websites embed this page in a frame" or "only load scripts from trusted sources." Right now Postje sends zero security headers.
 
 **Files:**
 - Modify: `next.config.ts`

@@ -34,7 +34,7 @@ export default async function DashboardLayout({
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
             <span className="text-[10px] uppercase tracking-[1px] text-[var(--text-muted)]">
-              SOCIAL AI
+              POSTJE
             </span>
             <p className="font-[family-name:var(--font-display)] text-lg text-[var(--text-primary)]">
               {client.businessName}

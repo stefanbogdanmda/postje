@@ -836,7 +836,7 @@ export function composeStalePostEmail(
         </a>
       </p>
       <p style="color: #666; font-size: 13px; margin: 0;">
-        Deze melding is automatisch verstuurd door Social AI. De post blijft in concept-status tot je actie onderneemt.
+        Deze melding is automatisch verstuurd door Postje. De post blijft in concept-status tot je actie onderneemt.
       </p>
     </div>
   `

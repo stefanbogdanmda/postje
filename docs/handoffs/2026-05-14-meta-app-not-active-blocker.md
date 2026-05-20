@@ -8,7 +8,7 @@
 
 ## TL;DR
 
-Three days of trying to test the Meta OAuth flow end-to-end. Got past every gate except the final one: when the user clicks **Connect Instagram / Facebook** in Social AI and gets redirected to Meta, Meta shows **"App not active"** instead of the consent screen. The user is considering pivoting away from Meta entirely (to Ayrshare-style intermediary, GBP, or newsletter product). A decision was deferred to a fresh session.
+Three days of trying to test the Meta OAuth flow end-to-end. Got past every gate except the final one: when the user clicks **Connect Instagram / Facebook** in Postje and gets redirected to Meta, Meta shows **"App not active"** instead of the consent screen. The user is considering pivoting away from Meta entirely (to Ayrshare-style intermediary, GBP, or newsletter product). A decision was deferred to a fresh session.
 
 ## What this session actually accomplished
 
@@ -89,7 +89,7 @@ The user did not commit either way. They closed the session at the "sound right?
 
 ### If the user wants to evaluate Ayrshare
 - Sign up for the free tier
-- Map the existing Social AI code's expectations (look at `src/lib/meta/` — uses Page tokens + IG Business IDs) onto Ayrshare's API shape
+- Map the existing Postje code's expectations (look at `src/lib/meta/` — uses Page tokens + IG Business IDs) onto Ayrshare's API shape
 - Estimate the rewrite scope of replacing `src/lib/meta/` with `src/lib/ayrshare/` (probably a few hours given how isolated the meta module is — three commits add it cleanly, look at git log on `feat/publisher-engine`)
 - Decide based on that estimate
 
