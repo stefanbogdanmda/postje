@@ -45,7 +45,7 @@ export function composeDeletionEmail(args: DeletionEmailArgs): ComposedEmail {
       <h2 style="margin: 0 0 16px;">Je hebt om verwijdering gevraagd</h2>
       <p style="margin: 0 0 12px;">Hallo!</p>
       <p style="margin: 0 0 12px;">
-        Je hebt zojuist gevraagd om je Social AI-account (${safeEmail}) te verwijderen.
+        Je hebt zojuist gevraagd om je Postje-account (${safeEmail}) te verwijderen.
         We wachten 24 uur voordat we dit definitief doen &mdash; zodat je tijd hebt om je te bedenken.
       </p>
       <p style="margin: 0 0 24px; padding: 12px 16px; background: #fff7e6; border-left: 4px solid #f5a623; border-radius: 4px;">

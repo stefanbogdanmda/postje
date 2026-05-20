@@ -12,7 +12,7 @@ const SAMPLE_POST: StalePost = {
   firstSeenAt: new Date("2026-05-11T10:00:00Z"),
 }
 
-const APP_URL = "https://social-ai.example.com"
+const APP_URL = "https://postje.example.com"
 
 describe("composeStalePostEmail", () => {
   it("includes the client business name in the subject", () => {

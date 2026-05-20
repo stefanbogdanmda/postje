@@ -20,7 +20,7 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Social AI",
+  title: "Postje",
   description: "Social media management for small businesses",
 };
 
