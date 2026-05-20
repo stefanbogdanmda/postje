@@ -656,7 +656,7 @@ export default async function DashboardLayout({
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
             <p className="text-xs text-[#999] uppercase tracking-wider font-medium">
-              Social AI
+              Postje
             </p>
             <h1 className="text-lg font-semibold text-[#1a1a1a] mt-0.5">
               {client.businessName}
@@ -1606,7 +1606,7 @@ Run: `npm run dev`
 - [ ] **Step 2: Verify the dashboard loads**
 
 Open `http://localhost:3000/dashboard` in a browser. Verify:
-- Header shows "Social AI" + business name + "Log uit"
+- Header shows "Postje" + business name + "Log uit"
 - Three sections render (may be empty states if no seed data)
 - No console errors
 

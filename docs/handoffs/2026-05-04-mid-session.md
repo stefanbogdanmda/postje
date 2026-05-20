@@ -1,4 +1,4 @@
-# Handoff Document — Social AI Magic Link Auth (Session 3 — Mid-Feature)
+# Handoff Document — Postje Magic Link Auth (Session 3 — Mid-Feature)
 
 Saved: 4 May 2026, end of partial session 3
 Status: Auth feature 95% complete. One known bug. Branch pushed, code committed, ready for fresh debugging.
@@ -62,7 +62,7 @@ Branch state: feature/magic-link-auth — 15 commits ahead of main, pushed to Gi
 
 This is important: during debugging, Claude Code stripped some features and only some were restored.
 
-**Restored:** custom Dutch HTML email template (Je inloglink voor Social AI, branded body, "Inloggen" button).
+**Restored:** custom Dutch HTML email template (Je inloglink voor Postje, branded body, "Inloggen" button).
 
 **NOT restored, must be re-added:** rate limiting (5 magic link requests per email per 15 minutes, in-memory Map). The original code in src/lib/rate-limit.ts may still exist on disk but isn't wired into auth.ts. Verify with `git log --all -- src/lib/rate-limit.ts`.
 
@@ -121,4 +121,4 @@ In rough order of likelihood, given the symptoms:
 
 ## Tonight in one sentence
 
-We took Social AI from "empty Next.js skeleton" to "magic link auth 95% built, blocked on a session cookie recognition bug that has a clear next step (check browser cookies in dev tools)" — and stopped before debugging tired.
+We took Postje from "empty Next.js skeleton" to "magic link auth 95% built, blocked on a session cookie recognition bug that has a clear next step (check browser cookies in dev tools)" — and stopped before debugging tired.

@@ -1,6 +1,6 @@
 # Handoff — Part A Improvements Continuation
 
-Drop this whole document into a fresh chat to continue Social AI's operational improvements where the previous session left off. Read top to bottom before doing anything.
+Drop this whole document into a fresh chat to continue Postje's operational improvements where the previous session left off. Read top to bottom before doing anything.
 
 ---
 
@@ -93,7 +93,7 @@ Order is dependency-based plus impact: do them in this order unless the user say
 
 ### #5 — Publisher path
 
-**Problem:** Posts get `publishAt` stamped when approved, but nothing consumes it. A real client cannot be served by Social AI today — approved posts sit forever. The central product promise (auto-publishing to Instagram + Facebook) isn't wired.
+**Problem:** Posts get `publishAt` stamped when approved, but nothing consumes it. A real client cannot be served by Postje today — approved posts sit forever. The central product promise (auto-publishing to Instagram + Facebook) isn't wired.
 
 **Approach:** This is the biggest and most ambitious of the four. It deserves its own design spec before any plan, and the spec will need to choose between two delivery models:
 

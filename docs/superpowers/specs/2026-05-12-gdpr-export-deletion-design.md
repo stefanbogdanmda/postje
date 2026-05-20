@@ -262,7 +262,7 @@ Dutch, friendly, warm — per [CLAUDE.md](CLAUDE.md) §10 ("Never write Dutch co
 
 > Hallo!
 >
-> Je hebt zojuist gevraagd om je Social AI-account te verwijderen. We wachten 24 uur voordat we dit definitief doen — zodat je tijd hebt om je te bedenken.
+> Je hebt zojuist gevraagd om je Postje-account te verwijderen. We wachten 24 uur voordat we dit definitief doen — zodat je tijd hebt om je te bedenken.
 >
 > **Je account wordt verwijderd op [datetime in Europe/Amsterdam].**
 >

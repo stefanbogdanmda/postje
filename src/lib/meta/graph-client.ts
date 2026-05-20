@@ -16,7 +16,7 @@ export interface MetaFetchErr {
 
 export type MetaFetchResult = MetaFetchOk | MetaFetchErr
 
-const USER_AGENT = "social-ai/0.1 (+https://github.com/stefanbogdanmda/social-ai)"
+const USER_AGENT = "postje/0.1 (+https://github.com/stefanbogdanmda/social-ai)"
 const DEFAULT_TIMEOUT_MS = 15_000
 
 /**

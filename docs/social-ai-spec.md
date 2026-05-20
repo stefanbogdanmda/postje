@@ -1,13 +1,13 @@
-# Social AI — Product Specification v1
+# Postje — Product Specification v1
 
 Written: 3 May 2026
 Owner: Stefan, Arnhem (NL)
 
-## What Social AI Is
+## What Postje Is
 
 A SaaS product that runs social media for small businesses. Clients pay a monthly subscription. The system generates posts using AI, the client approves them in a weekly review, and the system publishes them automatically to Facebook and Instagram (TikTok later).
 
-Stefan operates Social AI as a one-person agency. Each client signs up, gets their own account inside Social AI. Stefan sits above all clients with a management dashboard.
+Stefan operates Postje as a one-person agency. Each client signs up, gets their own account inside Postje. Stefan sits above all clients with a management dashboard.
 
 Core promise: "We post for you, professionally, in a way that feels human — for a fraction of what a freelance social media manager costs. You spend ~5 minutes a week reviewing."
 
@@ -98,11 +98,11 @@ Charts, analytics, campaign planning, billing dashboards → v2+
 | Instagram + Facebook bundle | €200/month |
 | TikTok (future) | +€200/month |
 
-Reference: small business owners in NL pay ~€500/month to a freelancer for similar work. Social AI is at ~40% of that.
+Reference: small business owners in NL pay ~€500/month to a freelancer for similar work. Postje is at ~40% of that.
 
 Pricing minus running costs (Claude API, hosting, video editor APIs for TikTok) = real profit. Some clients will be more expensive to serve than others.
 
-## Brand Voice (Social AI itself)
+## Brand Voice (Postje itself)
 
 Friendly, warm, conversational. Talks like a smart friend who knows social media. Not corporate. Not aggressive. Not sales-y. Consistent across website, dashboard, emails, support replies.
 
@@ -116,11 +116,11 @@ Friendly, warm, conversational. Talks like a smart friend who knows social media
 - **Scheduled Tasks:** Vercel Cron (n8n was considered but deferred — Vercel Cron is built-in and free)
 - **Email:** Resend (free tier)
 - **Auth:** Magic link email (no passwords)
-- **Repo:** Private GitHub repo `social-ai`
+- **Repo:** Private GitHub repo `social-ai` (brand name: Postje)
 
 ## Budget Constraint (Build Phase)
 
-Until Social AI has its first paying client, the project runs on free tiers and pay-as-you-go services only. No new monthly subscriptions beyond Claude Code Max (already paid).
+Until Postje has its first paying client, the project runs on free tiers and pay-as-you-go services only. No new monthly subscriptions beyond Claude Code Max (already paid).
 
 ## Legal & Compliance
 
@@ -133,7 +133,7 @@ Required before first paying customer:
 - Data Processing Agreement (DPA) with B2B clients
 - Technical features matching legal commitments (data export, deletion, consent tracking)
 
-Building Social AI continues normally until launch. Legal setup happens in parallel, in the weeks before first paid client.
+Building Postje continues normally until launch. Legal setup happens in parallel, in the weeks before first paid client.
 
 ## Out of Scope for v1
 
@@ -144,16 +144,16 @@ Explicitly not building:
 - Automated billing / invoicing (manual at first)
 - Advanced analytics / performance reports
 - Self-serve onboarding without kickoff call
-- Migrating Zeven, Efeze, Klein Canada into Social AI (decision deferred)
+- Migrating Zeven, Efeze, Klein Canada into Postje (decision deferred)
 
 ## Reference Material (Not Code to Reuse)
 
-Existing client work — Zeven, Efeze, Klein Canada — is reference material only. Detailed prototypes that taught Stefan what works. Social AI v1 starts from a clean repo.
+Existing client work — Zeven, Efeze, Klein Canada — is reference material only. Detailed prototypes that taught Stefan what works. Postje v1 starts from a clean repo.
 
 ## Open Questions / Future Decisions
 
 Known unknowns to revisit:
-- Whether old client systems eventually migrate into Social AI
+- Whether old client systems eventually migrate into Postje
 - Exact Meta API approval path (Development Mode for first ~25 test users; full review needed later)
 - Specific magic-link auth implementation (Auth.js vs Clerk vs custom)
 - Video editor API for TikTok

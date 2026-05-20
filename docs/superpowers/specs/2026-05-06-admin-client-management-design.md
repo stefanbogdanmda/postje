@@ -136,15 +136,15 @@ Two emails are sent in sequence when a client is created:
 
 ### 1. Welcome Email (direct via Resend)
 
-- **Subject:** "Welkom bij Social AI"
-- **Body (Dutch):** Friendly intro explaining Stefan created their account and that a login link is on the way. Example: "Stefan heeft een account voor je aangemaakt bij Social AI. Je ontvangt zo een tweede e-mail met een inloglink waarmee je je dashboard kunt bekijken."
-- **Tone:** Warm, friendly, conversational — matches the Social AI brand voice
+- **Subject:** "Welkom bij Postje"
+- **Body (Dutch):** Friendly intro explaining Stefan created their account and that a login link is on the way. Example: "Stefan heeft een account voor je aangemaakt bij Postje. Je ontvangt zo een tweede e-mail met een inloglink waarmee je je dashboard kunt bekijken."
+- **Tone:** Warm, friendly, conversational — matches the Postje brand voice
 - **No magic link** — this email just provides context
 
 ### 2. Magic Link Email (via Auth.js)
 
 - Standard Auth.js login email, triggered by `signIn("resend", ...)`
-- Uses the existing login template: "Je inloglink voor Social AI"
+- Uses the existing login template: "Je inloglink voor Postje"
 - Contains the actual magic link for logging in
 - Works identically to the normal login flow — creates a session, sets `hasLoggedIn` to true on first click, lands the client on `/welcome` → `/dashboard`
 

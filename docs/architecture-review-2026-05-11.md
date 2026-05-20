@@ -1,4 +1,4 @@
-# Social AI — Architecture Review
+# Postje — Architecture Review
 
 **Date:** 2026-05-11
 **Branch reviewed:** `feat/postgres-migration`
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-Social AI is in a fundamentally healthy state for a learning developer's greenfield project: clear conventions, a working magic-link auth flow, a real authorization layer with multi-tenant `client_id` enforcement, and small, well-named modules. However, **the project is mid-air on the SQLite→Postgres migration and currently won't build or type-check**. Schema (`src/db/schema.ts`) and `drizzle.config.ts` have been rewritten to Postgres while the runtime (`src/db/index.ts`), test scaffolding, repository layer, and call sites still use synchronous `better-sqlite3` APIs.
+Postje is in a fundamentally healthy state for a learning developer's greenfield project: clear conventions, a working magic-link auth flow, a real authorization layer with multi-tenant `client_id` enforcement, and small, well-named modules. However, **the project is mid-air on the SQLite→Postgres migration and currently won't build or type-check**. Schema (`src/db/schema.ts`) and `drizzle.config.ts` have been rewritten to Postgres while the runtime (`src/db/index.ts`), test scaffolding, repository layer, and call sites still use synchronous `better-sqlite3` APIs.
 
 The biggest risks are:
 - (a) finishing this migration cleanly without losing the existing tenant-isolation guarantees,
@@ -154,8 +154,8 @@ docs/                             Spec, handoffs, superpowers plans
 
 #### H2. `src/data/clients/cafe-de-hoek.ts` and `public/generated/cafe-de-hoek/*` are prototype leakage
 
-- **What's wrong:** CLAUDE.md §1 says "Three earlier prototypes exist… they are reference material only — Social AI does not import their code." But `src/app/admin/generate-preview/page.tsx` imports `CAFE_DE_HOEK_CLIENT_ID` from `src/data/clients/cafe-de-hoek.ts`, and locally there are images in `public/generated/cafe-de-hoek/` attached to that hardcoded client. The handoff doc notes this was done for local visual review.
-- **Why it matters:** Two coupled risks. First, an admin page hard-couples to a specific test client ID — any deploy where that client doesn't exist will 500. Second, the convention "no prototype code in Social AI" is already eroded; if it stays, the line will keep moving.
+- **What's wrong:** CLAUDE.md §1 says "Three earlier prototypes exist… they are reference material only — Postje does not import their code." But `src/app/admin/generate-preview/page.tsx` imports `CAFE_DE_HOEK_CLIENT_ID` from `src/data/clients/cafe-de-hoek.ts`, and locally there are images in `public/generated/cafe-de-hoek/` attached to that hardcoded client. The handoff doc notes this was done for local visual review.
+- **Why it matters:** Two coupled risks. First, an admin page hard-couples to a specific test client ID — any deploy where that client doesn't exist will 500. Second, the convention "no prototype code in Postje" is already eroded; if it stays, the line will keep moving.
 - **Files:** `src/data/clients/cafe-de-hoek.ts`, `src/app/admin/generate-preview/page.tsx`, `src/app/admin/generate-preview/generate-preview-client.tsx`, `public/generated/cafe-de-hoek/*` (gitignored but present locally).
 - **Fix:** Make `/admin/generate-preview` accept a `clientId` from the URL (`/admin/clients/[id]/generate-preview`) or a `<select>` on the page that lists real clients. Delete `src/data/clients/cafe-de-hoek.ts`. The generated test images can stay in `public/generated/` since they're gitignored, but they should not be referenced from app code.
 

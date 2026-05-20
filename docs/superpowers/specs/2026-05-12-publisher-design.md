@@ -8,7 +8,7 @@
 
 ## 1. What we're building
 
-Today, when a client approves a post, `posts.publishAt` is stamped and... nothing else happens. The approved post sits forever. That's the central product-promise gap: Social AI's pitch is "we run your socials," but no actual publishing exists. This branch is the publishing.
+Today, when a client approves a post, `posts.publishAt` is stamped and... nothing else happens. The approved post sits forever. That's the central product-promise gap: Postje's pitch is "we run your socials," but no actual publishing exists. This branch is the publishing.
 
 The work breaks naturally into three streams, each large enough to be its own implementation plan:
 
@@ -123,7 +123,7 @@ export const publishAttempts = pgTable(
 
 Stefan's Meta setup doc already proves out the test path. For a real client, the flow becomes:
 
-1. Client signs in to Social AI. Goes to `/dashboard/connect` (new).
+1. Client signs in to Postje. Goes to `/dashboard/connect` (new).
 2. Clicks "Verbind je Facebook Pagina en Instagram". Redirected to Facebook OAuth dialog (`https://www.facebook.com/v21.0/dialog/oauth?...`).
 3. After consent, Facebook redirects to `/api/auth/meta/callback?code=...`.
 4. Callback exchanges `code` for short-lived user token via `oauth/access_token`.

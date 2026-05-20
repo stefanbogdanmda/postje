@@ -1,17 +1,17 @@
 # Meta Setup Guide — First Test with Tommy Culinair
 
-This guide walks through everything Social AI needs on the Meta side before it can publish to Facebook and Instagram. Our first test subject is **Tommy Culinair**, a real HoReCa business owned by a friend. Using a real client (instead of fake test accounts) is closer to how production will actually work — Tommy will go through the exact OAuth flow that future paying clients go through.
+This guide walks through everything Postje needs on the Meta side before it can publish to Facebook and Instagram. Our first test subject is **Tommy Culinair**, a real HoReCa business owned by a friend. Using a real client (instead of fake test accounts) is closer to how production will actually work — Tommy will go through the exact OAuth flow that future paying clients go through.
 
 Total time: ~25 focused minutes on your side, plus ~10 minutes Tommy has to spend on his phone. Don't split this across multiple days — Meta's UI is easier to navigate while you've still got the layout in your head.
 
 You'll come out of this with:
 
 - A Facebook **Page** for Tommy Culinair, linked to his existing Business Instagram
-- Tommy added as an accepted **tester** on the Social AI App
+- Tommy added as an accepted **tester** on the Postje App
 - The Meta App fully configured: products added, OAuth redirect URI whitelisted
 - The **App ID** and **App Secret** ready to drop into `.env.local`
 
-The OAuth flow built into Social AI (Plan #5a) then handles fetching and encrypting the long-lived Page access token automatically when Tommy clicks **Connect** in the dashboard.
+The OAuth flow built into Postje (Plan #5a) then handles fetching and encrypting the long-lived Page access token automatically when Tommy clicks **Connect** in the dashboard.
 
 ## What's changed (2026-05-14)
 
@@ -38,8 +38,8 @@ There's a copy-pasteable **"Send this to Tommy"** block at the bottom you can ha
 | **Personal account / Profile** | The Facebook account a person logs into with their real name. It's the *owner identity* — Pages, Apps, and Business accounts all hang off this. Tommy needs one of these (he has one). |
 | **Page** | What businesses post AS on Facebook. Different from a profile. Tommy doesn't have one yet — Step 1 creates it. |
 | **Instagram Business account** | An IG account flagged as "professional → Business". Required for API publishing. Tommy already has this. |
-| **Meta Business Account** (or "Business Portfolio") | A container that holds Pages, Apps, and ad accounts together. You (Stefan) have one called `Social AI`; Tommy doesn't need one. |
-| **Meta App** | Your registration with Meta saying "I'm building software that uses the Graph API." Has an App ID and App Secret. You already created this (`Social AI Dev`). |
+| **Meta Business Account** (or "Business Portfolio") | A container that holds Pages, Apps, and ad accounts together. You (Stefan) have one called `Postje`; Tommy doesn't need one. |
+| **Meta App** | Your registration with Meta saying "I'm building software that uses the Graph API." Has an App ID and App Secret. You already created this (`Postje Dev`). |
 | **Development Mode** | The state your App is in when only people you've explicitly added as testers can authorize it. Free, no review required. We live here until ~10–20 paying clients. |
 | **Access token** | The credential we use to make API calls. Three flavors: short-lived user (1h), long-lived user (~60d), and Page token (effectively non-expiring). The OAuth flow does the trading automatically. |
 | **Scope / Permission** | A specific thing a token is allowed to do, e.g. `pages_manage_posts` or `instagram_content_publish`. |
@@ -55,10 +55,10 @@ Meta rearranges the developer console roughly every 6 months. Button labels and 
 You've already completed these — confirm each is still true, then skip ahead.
 
 - **Meta Developer account** created at developers.facebook.com.
-- **Meta Business Account** (named `Social AI`, your operator-side container) created at business.facebook.com.
-- **Meta App** (`Social AI Dev`) created, type **Business**, in **Development Mode**.
+- **Meta Business Account** (named `Postje`, your operator-side container) created at business.facebook.com.
+- **Meta App** (`Postje Dev`) created, type **Business**, in **Development Mode**.
 
-Quick verification: open developers.facebook.com → **My Apps**. You should see `Social AI Dev` listed and the header on its dashboard should read **Development**.
+Quick verification: open developers.facebook.com → **My Apps**. You should see `Postje Dev` listed and the header on its dashboard should read **Development**.
 
 ---
 
@@ -123,7 +123,7 @@ For each missing one: click **Set up** on its tile, leave defaults, click throug
 
 > **Done by you, 2 min.**
 
-This is the address Meta sends users back to after they grant access to your App. Social AI's OAuth callback lives at `/api/meta/callback`. Without whitelisting it here, the Connect button inside Social AI fails with a "URL Blocked" error.
+This is the address Meta sends users back to after they grant access to your App. Postje's OAuth callback lives at `/api/meta/callback`. Without whitelisting it here, the Connect button inside Postje fails with a "URL Blocked" error.
 
 1. App Dashboard sidebar → **Products** → **Facebook Login for Business** → **Settings** (sometimes labeled **Configuration**).
 2. Find the **Valid OAuth Redirect URIs** field.
@@ -132,7 +132,7 @@ This is the address Meta sends users back to after they grant access to your App
    - `https://<your-production-domain>/api/meta/callback` — for production (leave off until you have a real domain)
 4. Save.
 
-**Expected outcome:** Both URLs appear in the field. When Tommy clicks Connect inside Social AI, Meta will redirect him to one of these — anything else gets blocked.
+**Expected outcome:** Both URLs appear in the field. When Tommy clicks Connect inside Postje, Meta will redirect him to one of these — anything else gets blocked.
 
 ---
 
@@ -165,7 +165,7 @@ Both invites need to be sent by you, and both have to be **accepted by Tommy** b
 
 Two notifications, two accept actions:
 
-- **Facebook tester invite:** Tommy opens his Facebook notifications, sees the invitation from Social AI Dev, clicks **Accept**.
+- **Facebook tester invite:** Tommy opens his Facebook notifications, sees the invitation from Postje Dev, clicks **Accept**.
 - **Instagram tester invite:** Tommy logs into the Tommy Culinair Instagram → Settings → **Apps and websites** → **Tester invites** → **Accept**.
 
 **Expected outcome:** Back on your side, the App Roles screen shows Tommy as an **Accepted** tester (not "Pending"), and the Instagram testers list shows his handle as Accepted too. If either says Pending, Tommy hasn't clicked through yet.
@@ -174,7 +174,7 @@ Two notifications, two accept actions:
 
 ## What you walk away with — the required set
 
-After Step 5 is fully accepted, you have everything Social AI needs:
+After Step 5 is fully accepted, you have everything Postje needs:
 
 | Variable | Example | Where to find |
 |---|---|---|
@@ -230,12 +230,12 @@ Two ways to run this. The "dry run" version uses your own throwaway Page (set up
 For either version:
 
 1. `npm run dev`
-2. Sign in as admin on Social AI.
+2. Sign in as admin on Postje.
 3. Create a client row in the admin UI for whoever you're testing with — yourself for the dry run, Tommy for the real test. Go to `/admin/clients/<that-client-id>`.
 4. Click **Connect Instagram / Facebook**.
 5. You'll be redirected to Meta. **You need to be logged into Facebook as the account that owns the target Page.** For the dry run that's you; for the real test that's Tommy (easiest: have him do it on his phone with screen-share).
 6. Approve the Meta consent dialog. Pick the correct Page when asked — your throwaway Page for the dry run, **Tommy Culinair** for the real test.
-7. Meta redirects back to Social AI. The panel should flip to **Connected**, showing the Page name and Instagram ID.
+7. Meta redirects back to Postje. The panel should flip to **Connected**, showing the Page name and Instagram ID.
 8. In Drizzle Studio, open the `meta_connections` table. There should be a new row tied to the right `client_id`, with an encrypted `access_token` (gibberish, not plaintext) and the Page/IG IDs visible.
 
 If anything fails, **screenshot the error before clicking away**. Meta errors are cryptic but specific — wrong fixes waste hours.
@@ -244,12 +244,12 @@ If anything fails, **screenshot the error before clicking away**. Meta errors ar
 
 ## Step 6 — Optional: manual token fetch via Graph API Explorer
 
-> **Skip this on your first time through.** Social AI's OAuth flow (Plan #5a) does all of this automatically. This step is kept for two reasons: (a) it explains what the OAuth flow is doing under the hood, useful when you debug Meta errors; (b) if you ever need to hit the Graph API directly without running Social AI, the manual token is how.
+> **Skip this on your first time through.** Postje's OAuth flow (Plan #5a) does all of this automatically. This step is kept for two reasons: (a) it explains what the OAuth flow is doing under the hood, useful when you debug Meta errors; (b) if you ever need to hit the Graph API directly without running Postje, the manual token is how.
 
 ### 6a. Open the Graph API Explorer
 
 1. Go to developers.facebook.com/tools/explorer.
-2. Top right: set **Meta App** to `Social AI Dev`.
+2. Top right: set **Meta App** to `Postje Dev`.
 3. Set **User or Page** to **User Token**.
 4. Click **Add a Permission** and add all of these:
    - `pages_show_list`
@@ -328,7 +328,7 @@ If anything errors, **screenshot the error** — most Meta errors are cryptic bu
 
 Copy-paste the block below to Tommy (translate to Dutch as needed — your call on tone). It tells him exactly what's on his plate, in order.
 
-> Hé Tommy — voor het testen van Social AI met jouw zaak heb ik drie kleine dingen van je nodig. Samen ongeveer 10 minuten, allemaal op je telefoon.
+> Hé Tommy — voor het testen van Postje met jouw zaak heb ik drie kleine dingen van je nodig. Samen ongeveer 10 minuten, allemaal op je telefoon.
 >
 > **1) Maak een Facebook Page voor Tommy Culinair**
 > Op facebook.com → linker zijbalk → **Pages** → **Create new Page**. Naam: "Tommy Culinair". Categorie: kies wat het dichtst bij je werk ligt (Restaurant, Catering, Personal Chef). Klik op Create. De rest (foto, adres, openingstijden) kun je later doen. Stuur me daarna de link naar de Page.
@@ -337,7 +337,7 @@ Copy-paste the block below to Tommy (translate to Dutch as needed — your call 
 > Open Instagram-app → jouw Tommy Culinair profiel → **Instellingen en privacy** → **Accounttype en tools** → check dat het op **Business** staat (niet Creator). Dan: **Bewerk profiel** → onderaan zie je **Page** — kies "Tommy Culinair". Maak een screenshot van dat scherm en stuur 'm naar mij.
 >
 > **3) Accepteer de twee uitnodigingen die ik je stuur**
-> Je krijgt straks twee uitnodigingen om "tester" te worden voor de Social AI app:
+> Je krijgt straks twee uitnodigingen om "tester" te worden voor de Postje app:
 > - Eén op Facebook (notificatie) — gewoon op **Accepteer** klikken.
 > - Eén op Instagram — in IG-app: **Instellingen** → **Apps en websites** → **Tester-uitnodigingen** → accepteer.
 >

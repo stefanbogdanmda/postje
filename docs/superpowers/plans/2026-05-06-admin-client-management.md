@@ -139,13 +139,13 @@ export async function sendWelcomeEmail(email: string): Promise<{
     await resend.emails.send({
       from: EMAIL_FROM,
       to: email,
-      subject: "Welkom bij Social AI",
+      subject: "Welkom bij Postje",
       html: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #1a1a1a;">Social AI</h2>
+          <h2 style="color: #1a1a1a;">Postje</h2>
           <p>Hallo!</p>
           <p>
-            Stefan heeft een account voor je aangemaakt bij Social AI.
+            Stefan heeft een account voor je aangemaakt bij Postje.
             Je ontvangt zo een tweede e-mail met een inloglink waarmee
             je je dashboard kunt bekijken.
           </p>

@@ -1,6 +1,6 @@
 # Part A Improvements — Sequencing & Rationale
 
-Created 2026-05-11 from the deep-dive research that identified five operational/reliability improvements to Social AI before the first paying client.
+Created 2026-05-11 from the deep-dive research that identified five operational/reliability improvements to Postje before the first paying client.
 
 This document is the **master sequencing plan**. Each line item below gets its own detailed implementation plan when its turn arrives. Do not try to ship them in one branch.
 

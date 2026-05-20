@@ -6,7 +6,7 @@
 
 ## Overview
 
-The client dashboard is the primary interface for Social AI clients. After logging in via magic link, clients land here to review, edit, approve, or reject their weekly social media posts. This is the first client-facing feature — everything before this was admin tooling.
+The client dashboard is the primary interface for Postje clients. After logging in via magic link, clients land here to review, edit, approve, or reject their weekly social media posts. This is the first client-facing feature — everything before this was admin tooling.
 
 ## Design Decisions
 
@@ -27,7 +27,7 @@ The client dashboard is the primary interface for Social AI clients. After loggi
 Three stacked sections, top to bottom:
 
 **Header:**
-- "Social AI" branding (small, uppercase, muted)
+- "Postje" branding (small, uppercase, muted)
 - Business name (prominent)
 - "Log uit" button (right-aligned)
 

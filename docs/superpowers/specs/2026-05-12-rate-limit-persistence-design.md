@@ -255,7 +255,7 @@ None added. `DATABASE_URL` is already present and used.
 - **Distributed rate limiter (Redis / Upstash).** The Vercel Marketplace has these, but they introduce a paid dependency. Postgres is already paid-for and free-tier sufficient. We revisit if throttle load becomes a hot path (unlikely for magic-link traffic).
 - **CAPTCHA on the login form.** Different defense layer, different UX trade-off. Not part of v1.
 - **Cron sweep to prune old rows.** Inline DELETE on each request handles cleanup for the keys we actually see. A separate sweep for fully abandoned keys (e.g. one-off attackers who never come back) could trim further, but at v1 traffic the table is bounded by `(distinct attempting emails) × MAX_REQUESTS`. Revisit when monitoring shows the table over ~10k rows.
-- **Per-platform separate limits.** One throttle key per email, full stop. No "different limits for the same email logging in from web vs API" — Social AI doesn't have an API surface yet.
+- **Per-platform separate limits.** One throttle key per email, full stop. No "different limits for the same email logging in from web vs API" — Postje doesn't have an API surface yet.
 
 ## 11. Open questions for implementation
 

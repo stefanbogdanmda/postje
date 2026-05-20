@@ -2,11 +2,11 @@
 
 Written: 4 May 2026
 Status: Approved
-Feature: First feature for Social AI
+Feature: First feature for Postje
 
 ## Overview
 
-Magic link authentication for Social AI. Clients and the admin (Stefan) log in by entering their email and clicking a link sent to their inbox. No passwords. Built on Auth.js with Resend for email delivery and Drizzle for database storage.
+Magic link authentication for Postje. Clients and the admin (Stefan) log in by entering their email and clicking a link sent to their inbox. No passwords. Built on Auth.js with Resend for email delivery and Drizzle for database storage.
 
 ## Decisions
 
@@ -132,15 +132,15 @@ If Stefan deletes a client who is currently logged in, their session cookie stil
 ## Email Template
 
 - **From (dev):** Resend default sender
-- **From (production):** `Social AI <login@socialai.nl>` (domain not purchased yet — bought before first paying client)
-- **Subject:** "Je inloglink voor Social AI"
+- **From (production):** `Postje <login@postje.nl>` (domain not purchased yet — bought before first paying client)
+- **Subject:** "Je inloglink voor Postje"
 - **Language:** Dutch
 - **Body contents:**
   - Short greeting
   - The magic link as a clear button
   - Note: "Deze link werkt 1 uur. Als je dit niet hebt aangevraagd, kun je deze e-mail veilig negeren."
   - No images, no marketing content, no footer clutter
-- **Brand name in all communications:** "Social AI"
+- **Brand name in all communications:** "Postje"
 
 ## Bootstrap (Admin Seed Script)
 

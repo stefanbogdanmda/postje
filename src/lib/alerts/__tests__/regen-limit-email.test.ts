@@ -12,7 +12,7 @@ const SAMPLE_POST: RegenLimitPost = {
   rejectionCount: 3,
 }
 
-const APP_URL = "https://social-ai.example.com"
+const APP_URL = "https://postje.example.com"
 
 describe("composeRegenLimitEmail", () => {
   it("includes the client business name in the subject", () => {
