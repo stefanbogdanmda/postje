@@ -63,6 +63,7 @@ export const clients = pgTable("clients", {
   brandPersonality: text("brandPersonality"),
   bannedPhrases: jsonb("bannedPhrases").$type<string[]>().notNull().default([]),
   examplePosts: jsonb("examplePosts").$type<string[]>().notNull().default([]),
+  postsPerWeek: integer("postsPerWeek").notNull().default(5),
   calibrationStartDate: timestamp("calibrationStartDate", { withTimezone: true, mode: "date" }),
   publishMode: text("publishMode", { enum: ["manual", "auto"] }).notNull().default("auto"),
 })

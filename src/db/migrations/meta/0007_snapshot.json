@@ -1,6 +1,6 @@
 {
-  "id": "3b81bd73-a1da-4917-8bc9-a6ea301a3cb5",
-  "prevId": "5ad9cbc4-1ea4-4b6b-922d-8541180aff02",
+  "id": "578d6d32-4fae-4a37-9371-98d180cf4f85",
+  "prevId": "3b81bd73-a1da-4917-8bc9-a6ea301a3cb5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -560,6 +560,80 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.meta_deletion_requests": {
+      "name": "meta_deletion_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "confirmationCode": {
+          "name": "confirmationCode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metaUserId": {
+          "name": "metaUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'received'"
+        },
+        "receivedAt": {
+          "name": "receivedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolvedAt": {
+          "name": "resolvedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "meta_deletion_requests_code_idx": {
+          "name": "meta_deletion_requests_code_idx",
+          "columns": [
+            {
+              "expression": "confirmationCode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meta_deletion_requests_confirmationCode_unique": {
+          "name": "meta_deletion_requests_confirmationCode_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "confirmationCode"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -1,0 +1,1 @@
+ALTER TABLE "clients" ADD COLUMN "postsPerWeek" integer DEFAULT 5 NOT NULL;

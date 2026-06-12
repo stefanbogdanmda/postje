@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
 import { requireAdmin } from "@/lib/authorization"
-import { CAFE_DE_HOEK_CLIENT_ID } from "@/data/clients/cafe-de-hoek"
+import { db } from "@/db"
+import { clients } from "@/db/schema"
+import { asc } from "drizzle-orm"
 import GeneratePreviewClient from "./generate-preview-client"
 
 export default async function GeneratePreviewPage() {
@@ -10,5 +12,10 @@ export default async function GeneratePreviewPage() {
     redirect("/login")
   }
 
-  return <GeneratePreviewClient clientId={CAFE_DE_HOEK_CLIENT_ID} />
+  const clientRows = await db
+    .select({ id: clients.id, businessName: clients.businessName })
+    .from(clients)
+    .orderBy(asc(clients.businessName))
+
+  return <GeneratePreviewClient clients={clientRows} />
 }

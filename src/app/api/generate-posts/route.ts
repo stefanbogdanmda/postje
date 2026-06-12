@@ -28,6 +28,7 @@ import type {
 } from "@/lib/ai/types"
 import type { GeneratePostsResponse } from "@/lib/posts/types"
 import type { Platform } from "@/lib/posts/config"
+import { clampPostsPerWeek } from "@/lib/posts/config"
 import { requireClientAccess, toErrorResponse } from "@/lib/authorization"
 import { rateLimitRequest } from "@/lib/request-rate-limit"
 import { parseBody } from "@/lib/validation"
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
         brandPersonality: clients.brandPersonality,
         bannedPhrases: clients.bannedPhrases,
         examplePosts: clients.examplePosts,
+        postsPerWeek: clients.postsPerWeek,
       })
       .from(clients)
       .where(eq(clients.id, clientId))
@@ -103,6 +105,14 @@ export async function POST(request: NextRequest) {
     }
 
     const clientProfile = buildClientProfile(clientRow)
+
+    // How many posting days to generate this week (one post per platform per
+    // day). Clamp to the allowed range, then never exceed the number of open
+    // days available.
+    const targetPostingDays = Math.min(
+      clampPostsPerWeek(clientRow.postsPerWeek),
+      openDates.length
+    )
 
     // Load analyzed photos
     const anthropic = getAnthropicClient()
@@ -136,13 +146,14 @@ export async function POST(request: NextRequest) {
     const planResponse = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 4000,
-      system: buildPlanSystemPrompt(analyzedPhotos.length),
+      system: buildPlanSystemPrompt(analyzedPhotos.length, targetPostingDays),
       messages: [
         {
           role: "user",
           content: buildPlanUserPrompt(
             clientProfile,
             analyzedPhotos,
+            targetPostingDays,
             lockedDaysContext
           ),
         },
@@ -249,6 +260,8 @@ export async function POST(request: NextRequest) {
 
     const openDatesSet = new Set(openDates)
     let droppedLockedCount = 0
+    let droppedOverCapCount = 0
+    const postedDates = new Set<string>()
 
     for (const post of validatedPosts) {
       const scheduledDate = dayNameToDate(post.day, startDate)
@@ -259,6 +272,18 @@ export async function POST(request: NextRequest) {
         droppedLockedCount++
         continue
       }
+
+      // Enforce the weekly cap server-side: never persist more than
+      // targetPostingDays distinct days, even if Claude returns extra. Days
+      // already counted are still allowed (both platforms for that day).
+      if (
+        !postedDates.has(scheduledDate) &&
+        postedDates.size >= targetPostingDays
+      ) {
+        droppedOverCapCount++
+        continue
+      }
+      postedDates.add(scheduledDate)
 
       const dayPlan = plan.days.find((d) => d.day === post.day)
       const photoId = dayPlan?.photoId ?? null
@@ -291,6 +316,12 @@ export async function POST(request: NextRequest) {
     if (droppedLockedCount > 0) {
       console.warn(
         `[generate-posts] Claude planned content for ${droppedLockedCount} locked day(s); dropped before insert`
+      )
+    }
+
+    if (droppedOverCapCount > 0) {
+      console.warn(
+        `[generate-posts] Claude returned more than ${targetPostingDays} posting day(s); dropped ${droppedOverCapCount} day(s) over the cap before insert`
       )
     }
 
