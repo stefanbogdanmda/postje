@@ -3,11 +3,14 @@ import {
   createTestDb,
   seedTestClient,
   seedTestPhoto,
+  seedMetaConnection,
   type TestDb,
 } from "@/test/db"
 import { insertPosts } from "@/lib/posts/repository"
 import {
   posts,
+  postFlags,
+  publishAttempts,
   deletionRequests,
   accounts,
   sessions,
@@ -196,5 +199,95 @@ describe("buildExportJson — missing data", () => {
     expect(export_.client).toBeNull()
     expect(export_.photos).toEqual([])
     expect(export_.posts).toEqual([])
+  })
+})
+
+describe("buildExportJson — meta connections, flags, publish attempts (v2)", () => {
+  it("includes the Meta connection but never the access token", async () => {
+    await seedMetaConnection(db, CLIENT_ID, {
+      accessTokenPlaintext: "SUPER_SECRET_TOKEN",
+    })
+
+    const export_ = await buildExportJson(db, USER_ID, new Date())
+
+    expect(export_.metaConnections).toHaveLength(1)
+    expect(export_.metaConnections[0]).toMatchObject({
+      pageId: "PAGE_1",
+      pageName: "Test Page",
+      instagramBusinessId: "IG_1",
+    })
+
+    // The token (plaintext or the encrypted column) must never appear.
+    const serialized = JSON.stringify(export_)
+    expect(serialized).not.toContain("SUPER_SECRET_TOKEN")
+    expect(serialized).not.toContain("encryptedAccessToken")
+  })
+
+  it("includes the client's post flags", async () => {
+    await insertPosts(db, [
+      {
+        clientId: CLIENT_ID,
+        platform: "instagram",
+        scheduledDate: "2026-05-13",
+        content: "flagged post",
+        reasoning: "r",
+      },
+    ])
+    const post = (await db.select().from(posts).where(eq(posts.clientId, CLIENT_ID)))[0]
+    await db.insert(postFlags).values({
+      postId: post.id,
+      clientId: CLIENT_ID,
+      reason: "wrong opening hours",
+    })
+
+    const export_ = await buildExportJson(db, USER_ID, new Date())
+
+    expect(export_.postFlags).toHaveLength(1)
+    expect(export_.postFlags[0]).toMatchObject({
+      postId: post.id,
+      reason: "wrong opening hours",
+    })
+  })
+
+  it("includes publish attempts for the client's posts", async () => {
+    await insertPosts(db, [
+      {
+        clientId: CLIENT_ID,
+        platform: "facebook",
+        scheduledDate: "2026-05-13",
+        content: "published post",
+        reasoning: "r",
+      },
+    ])
+    const post = (await db.select().from(posts).where(eq(posts.clientId, CLIENT_ID)))[0]
+    await db.insert(publishAttempts).values({
+      postId: post.id,
+      attemptedBy: "cron:publish-due",
+      success: true,
+      metaPostId: "FB_123",
+    })
+
+    const export_ = await buildExportJson(db, USER_ID, new Date())
+
+    expect(export_.publishAttempts).toHaveLength(1)
+    expect(export_.publishAttempts[0]).toMatchObject({
+      postId: post.id,
+      attemptedBy: "cron:publish-due",
+      success: true,
+    })
+  })
+
+  it("returns empty arrays for the new categories when the user has no client", async () => {
+    await db.insert(users).values({
+      id: "no-client-user",
+      email: "noclient@example.com",
+      role: "client",
+    })
+
+    const export_ = await buildExportJson(db, "no-client-user", new Date())
+
+    expect(export_.metaConnections).toEqual([])
+    expect(export_.postFlags).toEqual([])
+    expect(export_.publishAttempts).toEqual([])
   })
 })
