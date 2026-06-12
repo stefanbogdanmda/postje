@@ -21,4 +21,10 @@ export const INDUSTRY_POST_TIMES: Record<string, string> = {
 export const DEFAULT_POST_TIME = "09:00"
 
 export type Platform = "instagram" | "facebook"
-export type PostStatus = "draft" | "approved" | "rejected" | "published" | "failed"
+export type PostStatus =
+  | "draft"
+  | "approved"
+  | "publishing"
+  | "rejected"
+  | "published"
+  | "failed"

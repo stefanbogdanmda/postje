@@ -120,7 +120,11 @@ type Db = PgDatabase<
   ExtractTablesWithRelations<typeof schema>
 >
 
-export type GuardFailure = "not-approved" | "no-connection" | "ig-no-photo"
+export type GuardFailure =
+  | "not-approved"
+  | "no-connection"
+  | "ig-no-photo"
+  | "already-publishing"
 
 export interface PublishResult {
   success: boolean
@@ -173,6 +177,20 @@ export async function publishPostToMeta(
     return { success: false, guardFailure: "ig-no-photo" }
   }
 
+  // Claim the post before calling Meta: atomically move approved -> publishing.
+  // Only the invocation that wins this update proceeds, so a cron run and a
+  // manual "Publish now" (or two overlapping cron runs) can never both POST the
+  // same post to Meta and create a duplicate public post.
+  const claimed = await db
+    .update(schema.posts)
+    .set({ status: "publishing", updatedAt: new Date() })
+    .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "approved")))
+    .returning({ id: schema.posts.id })
+
+  if (claimed.length === 0) {
+    return { success: false, guardFailure: "already-publishing" }
+  }
+
   const accessToken = decryptToken(row.encryptedAccessToken)
   const start = Date.now()
 
@@ -205,7 +223,7 @@ export async function publishPostToMeta(
           publishError: null,
           updatedAt: new Date(),
         })
-        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "approved")))
+        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "publishing")))
       await tx.insert(schema.publishAttempts).values({
         postId,
         attemptedBy,
@@ -234,7 +252,7 @@ export async function publishPostToMeta(
           publishError: message,
           updatedAt: new Date(),
         })
-        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "approved")))
+        .where(and(eq(schema.posts.id, postId), eq(schema.posts.status, "publishing")))
       await tx.insert(schema.publishAttempts).values({
         postId,
         attemptedBy,
