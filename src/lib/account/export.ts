@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
@@ -10,7 +10,8 @@ type Db = PgDatabase<
   ExtractTablesWithRelations<typeof schema>
 >
 
-export const EXPORT_SCHEMA_VERSION = 1
+// v2 adds metaConnections, postFlags and publishAttempts to the export.
+export const EXPORT_SCHEMA_VERSION = 2
 
 export interface UserExport {
   id: string
@@ -68,6 +69,34 @@ export interface DeletionRequestExport {
   cancelledAt: string | null
 }
 
+// The access token is deliberately omitted — it is a secret and never exported.
+export interface MetaConnectionExport {
+  pageId: string
+  pageName: string
+  instagramBusinessId: string | null
+  grantedScopes: string
+  connectedAt: string
+  lastValidatedAt: string | null
+  expiresAt: string | null
+}
+
+export interface PostFlagExport {
+  postId: string
+  reason: string | null
+  flaggedAt: string
+  resolvedAt: string | null
+}
+
+export interface PublishAttemptExport {
+  postId: string
+  attemptedAt: string
+  attemptedBy: string
+  metaPostId: string | null
+  success: boolean
+  errorClass: string | null
+  errorMessage: string | null
+}
+
 export interface DataExport {
   schemaVersion: number
   exportedAt: string
@@ -75,6 +104,9 @@ export interface DataExport {
   client: ClientExport | null
   photos: PhotoExport[]
   posts: PostExport[]
+  metaConnections: MetaConnectionExport[]
+  postFlags: PostFlagExport[]
+  publishAttempts: PublishAttemptExport[]
   deletionRequest: DeletionRequestExport | null
 }
 
@@ -102,6 +134,9 @@ export async function buildExportJson(
       client: null,
       photos: [],
       posts: [],
+      metaConnections: [],
+      postFlags: [],
+      publishAttempts: [],
       deletionRequest: null,
     }
   }
@@ -130,6 +165,9 @@ export async function buildExportJson(
       client: null,
       photos: [],
       posts: [],
+      metaConnections: [],
+      postFlags: [],
+      publishAttempts: [],
       deletionRequest,
     }
   }
@@ -186,6 +224,53 @@ export async function buildExportJson(
     updatedAt: p.updatedAt.toISOString(),
   }))
 
+  const connectionRows = await db
+    .select()
+    .from(schema.metaConnections)
+    .where(eq(schema.metaConnections.clientId, clientRow.id))
+
+  const metaConnections: MetaConnectionExport[] = connectionRows.map((c) => ({
+    pageId: c.pageId,
+    pageName: c.pageName,
+    instagramBusinessId: c.instagramBusinessId,
+    grantedScopes: c.grantedScopes,
+    connectedAt: c.connectedAt.toISOString(),
+    lastValidatedAt: toIso(c.lastValidatedAt),
+    expiresAt: toIso(c.expiresAt),
+  }))
+
+  const flagRows = await db
+    .select()
+    .from(schema.postFlags)
+    .where(eq(schema.postFlags.clientId, clientRow.id))
+
+  const postFlags: PostFlagExport[] = flagRows.map((f) => ({
+    postId: f.postId,
+    reason: f.reason,
+    flaggedAt: f.flaggedAt.toISOString(),
+    resolvedAt: toIso(f.resolvedAt),
+  }))
+
+  // publish_attempts has no clientId; it links to the client via their posts.
+  const postIds = postRows.map((p) => p.id)
+  const attemptRows =
+    postIds.length > 0
+      ? await db
+          .select()
+          .from(schema.publishAttempts)
+          .where(inArray(schema.publishAttempts.postId, postIds))
+      : []
+
+  const publishAttempts: PublishAttemptExport[] = attemptRows.map((a) => ({
+    postId: a.postId,
+    attemptedAt: a.attemptedAt.toISOString(),
+    attemptedBy: a.attemptedBy,
+    metaPostId: a.metaPostId,
+    success: a.success,
+    errorClass: a.errorClass,
+    errorMessage: a.errorMessage,
+  }))
+
   const deletionRequest = await readDeletionRequest(db, userId)
 
   return {
@@ -195,6 +280,9 @@ export async function buildExportJson(
     client,
     photos,
     posts,
+    metaConnections,
+    postFlags,
+    publishAttempts,
     deletionRequest,
   }
 }
