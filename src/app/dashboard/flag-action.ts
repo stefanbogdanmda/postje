@@ -2,8 +2,8 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/db"
-import { postFlags, clients } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { postFlags, clients, posts } from "@/db/schema"
+import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 export async function flagPostAction(
@@ -24,6 +24,18 @@ export async function flagPostAction(
 
   if (!client) {
     return { success: false, error: "No client profile found" }
+  }
+
+  // Only allow flagging posts that belong to this client. Without this check a
+  // logged-in client could flag any post in the system by guessing its ID.
+  const postRows = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.id, postId), eq(posts.clientId, client.id)))
+    .limit(1)
+
+  if (!postRows[0]) {
+    return { success: false, error: "Post not found" }
   }
 
   await db.insert(postFlags).values({
