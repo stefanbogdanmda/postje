@@ -39,4 +39,5 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
           AUTH_RESEND_KEY: "re_placeholder"
           AUTH_SECRET: "ci-placeholder-secret-not-real"
+          CRON_SECRET: "ci-placeholder-cron-secret"
           ANTHROPIC_API_KEY: "sk-ant-placeholder"
