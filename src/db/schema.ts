@@ -63,6 +63,7 @@ export const clients = pgTable("clients", {
   brandPersonality: text("brandPersonality"),
   bannedPhrases: jsonb("bannedPhrases").$type<string[]>().notNull().default([]),
   examplePosts: jsonb("examplePosts").$type<string[]>().notNull().default([]),
+  postsPerWeek: integer("postsPerWeek").notNull().default(5),
   calibrationStartDate: timestamp("calibrationStartDate", { withTimezone: true, mode: "date" }),
   publishMode: text("publishMode", { enum: ["manual", "auto"] }).notNull().default("auto"),
 })
@@ -351,4 +352,32 @@ export const postFlags = pgTable(
     resolvedBy: text("resolvedBy"),
   },
   (t) => [index("post_flags_post_idx").on(t.postId)]
+)
+
+// ──────────────────────────────────────────────
+// metaDeletionRequests — Meta data-deletion callbacks.
+// When a Facebook/Instagram user removes the app, Meta POSTs a signed
+// request here. We record it (keyed by the confirmation code we hand back)
+// so the status URL can report the real state honestly, instead of claiming
+// "completed". There is no mapping from Meta's user_id to a Postje account,
+// so resolution is handled by the operator via the in-app GDPR flow.
+// ──────────────────────────────────────────────
+export const metaDeletionRequests = pgTable(
+  "meta_deletion_requests",
+  {
+    id: text("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    confirmationCode: text("confirmationCode").notNull().unique(),
+    metaUserId: text("metaUserId").notNull(),
+    status: text("status", { enum: ["received", "resolved"] })
+      .notNull()
+      .default("received"),
+    receivedAt: timestamp("receivedAt", { withTimezone: true, mode: "date" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    resolvedAt: timestamp("resolvedAt", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [index("meta_deletion_requests_code_idx").on(t.confirmationCode)]
 )

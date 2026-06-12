@@ -7,6 +7,8 @@ import {
 } from "../prompts"
 import type { ClientProfile, DayPlan, AnalyzedPhoto } from "../types"
 
+const POSTS_PER_WEEK = 5
+
 const testClient: ClientProfile = {
   name: "Café De Hoek",
   type: "café",
@@ -61,43 +63,54 @@ const testPlan: DayPlan[] = [
 
 describe("buildPlanSystemPrompt", () => {
   it("contains core planning instructions", () => {
-    const prompt = buildPlanSystemPrompt(0)
+    const prompt = buildPlanSystemPrompt(0, POSTS_PER_WEEK)
 
     expect(prompt).toContain("social media content planner")
     expect(prompt).toContain("Dutch businesses")
-    expect(prompt).toContain("7-day content plan")
+    expect(prompt).toContain("5 posting days")
     expect(prompt).toContain("Tuesday through Monday")
   })
 
+  it("reflects the requested posts-per-week count", () => {
+    expect(buildPlanSystemPrompt(0, 3)).toContain("3 posting days")
+    expect(buildPlanSystemPrompt(0, 6)).toContain("6 posting days")
+  })
+
   it("includes JSON-only response instruction", () => {
-    const prompt = buildPlanSystemPrompt(0)
+    const prompt = buildPlanSystemPrompt(0, POSTS_PER_WEEK)
     expect(prompt).toContain("valid JSON only")
   })
 
+  it("does not assume the business is a café or closes on Monday", () => {
+    const prompt = buildPlanSystemPrompt(0, POSTS_PER_WEEK)
+    expect(prompt).not.toContain("café is closed")
+    expect(prompt).not.toContain("Monday posts acknowledge")
+  })
+
   it("omits photo rules when no photos available", () => {
-    const prompt = buildPlanSystemPrompt(0)
+    const prompt = buildPlanSystemPrompt(0, POSTS_PER_WEEK)
     expect(prompt).not.toContain("Photo rules")
     expect(prompt).not.toContain("photo(s) available")
   })
 
   it("includes photo rules when photos are available", () => {
-    const prompt = buildPlanSystemPrompt(3)
+    const prompt = buildPlanSystemPrompt(3, POSTS_PER_WEEK)
 
     expect(prompt).toContain("Photo rules")
     expect(prompt).toContain("3 photo(s) available")
     expect(prompt).toContain("No two photo days may be back-to-back")
-    expect(prompt).toContain("assigned to exactly one day")
+    expect(prompt).toContain("Assign photos to your posting days")
   })
 
   it("shows correct photo count", () => {
-    expect(buildPlanSystemPrompt(1)).toContain("1 photo(s) available")
-    expect(buildPlanSystemPrompt(5)).toContain("5 photo(s) available")
+    expect(buildPlanSystemPrompt(1, POSTS_PER_WEEK)).toContain("1 photo(s) available")
+    expect(buildPlanSystemPrompt(5, POSTS_PER_WEEK)).toContain("5 photo(s) available")
   })
 })
 
 describe("buildPlanUserPrompt", () => {
   it("includes client business details", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
 
     expect(prompt).toContain("Café De Hoek")
     expect(prompt).toContain("café")
@@ -107,43 +120,43 @@ describe("buildPlanUserPrompt", () => {
   })
 
   it("includes menu highlights", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain("cappuccino, appelgebak, erwtensoep")
   })
 
   it("includes owner persona", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain("Marian")
     expect(prompt).toContain("45")
     expect(prompt).toContain("Friendly, down-to-earth, slightly playful")
   })
 
   it("includes target customers", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain("local regulars, families, remote workers")
   })
 
   it("includes platforms", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain("instagram + facebook")
   })
 
   it("includes JSON structure template", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain('"days"')
     expect(prompt).toContain('"theme"')
     expect(prompt).toContain('"photoId"')
-    expect(prompt).toContain("7 days")
+    expect(prompt).toContain("exactly 5 day objects")
   })
 
   it("includes text-only note when no photos", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).toContain("No photos available this week")
     expect(prompt).toContain("photoId: null for every day")
   })
 
   it("includes photo details when photos are available", () => {
-    const prompt = buildPlanUserPrompt(testClient, [testPhoto])
+    const prompt = buildPlanUserPrompt(testClient, [testPhoto], POSTS_PER_WEEK)
 
     expect(prompt).toContain("Photo 1 (ID: photo-001)")
     expect(prompt).toContain("latte art, wooden table")
@@ -155,12 +168,12 @@ describe("buildPlanUserPrompt", () => {
 
   it("appends locked days context when provided", () => {
     const context = "\n\nNote: Tuesday and Wednesday are already locked."
-    const prompt = buildPlanUserPrompt(testClient, [], context)
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK, context)
     expect(prompt).toContain("Tuesday and Wednesday are already locked")
   })
 
   it("omits example posts section when examplePosts is empty", () => {
-    const prompt = buildPlanUserPrompt(testClient, [])
+    const prompt = buildPlanUserPrompt(testClient, [], POSTS_PER_WEEK)
     expect(prompt).not.toContain("real example posts")
   })
 
@@ -172,7 +185,7 @@ describe("buildPlanUserPrompt", () => {
         "Zondag = pannenkoeken dag",
       ],
     }
-    const prompt = buildPlanUserPrompt(clientWithExamples, [])
+    const prompt = buildPlanUserPrompt(clientWithExamples, [], POSTS_PER_WEEK)
     expect(prompt).toContain("real example posts from this business")
     expect(prompt).toContain("Verse soep vandaag. Kom langs!")
     expect(prompt).toContain("Zondag = pannenkoeken dag")
@@ -248,6 +261,13 @@ describe("buildWriteSystemPrompt", () => {
     expect(prompt).toContain("your business")
     expect(prompt).not.toContain("your café")
   })
+
+  it("does not hardcode café-specific emojis or the soup example", () => {
+    const prompt = buildWriteSystemPrompt(testClient)
+    expect(prompt).not.toContain("☕")
+    expect(prompt).not.toContain("🌿")
+    expect(prompt).not.toContain("Erwtensoep")
+  })
 })
 
 describe("buildWriteUserPrompt", () => {
@@ -281,9 +301,11 @@ describe("buildWriteUserPrompt", () => {
     expect(prompt).toContain("local regulars, families, remote workers")
   })
 
-  it("mentions Monday closure", () => {
+  it("includes the business hours and a generic closure rule, not a hardcoded day", () => {
     const prompt = buildWriteUserPrompt(testClient, testPlan, [testPhoto])
-    expect(prompt).toContain("Closed Monday")
+    expect(prompt).toContain("Tue–Sun 8:00–17:00")
+    expect(prompt).toContain("closed on any day")
+    expect(prompt).not.toContain("Closed Monday")
   })
 
   it("includes JSON response structure", () => {
