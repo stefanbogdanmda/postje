@@ -43,6 +43,13 @@
       "when": 1779196290617,
       "tag": "0005_smiling_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781258161247,
+      "tag": "0006_nasty_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

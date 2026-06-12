@@ -40,6 +40,20 @@ export default function NewClientPage() {
     boxSizing: "border-box" as const,
   }
 
+  const textareaStyle = {
+    ...inputStyle,
+    minHeight: "80px",
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+  }
+
+  const hintStyle = {
+    color: "#999",
+    fontSize: "12px",
+    marginTop: "4px",
+    marginBottom: 0,
+  }
+
   return (
     <main
       style={{
@@ -173,7 +187,25 @@ export default function NewClientPage() {
           />
         </div>
 
-        <div style={{ marginBottom: "28px" }}>
+        <div style={{ marginBottom: "20px" }}>
+          <label htmlFor="postsPerWeek" style={labelStyle}>
+            Posts per week
+          </label>
+          <input
+            id="postsPerWeek"
+            name="postsPerWeek"
+            type="number"
+            min={3}
+            max={6}
+            defaultValue={5}
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            How many days per week to post (3–6). One post per platform each day.
+          </p>
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
           <label htmlFor="logoUrl" style={labelStyle}>
             Logo URL
           </label>
@@ -184,6 +216,88 @@ export default function NewClientPage() {
             placeholder="https://..."
             style={inputStyle}
           />
+        </div>
+
+        <div
+          style={{
+            borderTop: "1px solid #eee",
+            marginBottom: "28px",
+            paddingTop: "20px",
+          }}
+        >
+          <h2 style={{ fontSize: "15px", fontWeight: 600, margin: "0 0 4px" }}>
+            Brand voice
+          </h2>
+          <p style={{ color: "#666", fontSize: "12px", margin: "0 0 20px" }}>
+            These shape how the AI writes for this client. Leave any field blank
+            to fall back to sensible defaults.
+          </p>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="toneOfVoice" style={labelStyle}>
+              Tone of voice
+            </label>
+            <textarea
+              id="toneOfVoice"
+              name="toneOfVoice"
+              placeholder="Warm, direct, local. No corporate marketing language."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="targetCustomers" style={labelStyle}>
+              Target customers
+            </label>
+            <textarea
+              id="targetCustomers"
+              name="targetCustomers"
+              placeholder="Who are the customers? One per line or comma-separated."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="brandPersonality" style={labelStyle}>
+              Brand personality
+            </label>
+            <textarea
+              id="brandPersonality"
+              name="brandPersonality"
+              placeholder="How does the owner come across? e.g. friendly, no-nonsense, playful."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="bannedPhrases" style={labelStyle}>
+              Banned phrases
+            </label>
+            <textarea
+              id="bannedPhrases"
+              name="bannedPhrases"
+              placeholder={"One phrase per line\nculinair\ngeniet van"}
+              style={textareaStyle}
+            />
+            <p style={hintStyle}>
+              One phrase per line. The AI will never use these.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 0 }}>
+            <label htmlFor="examplePosts" style={labelStyle}>
+              Example posts
+            </label>
+            <textarea
+              id="examplePosts"
+              name="examplePosts"
+              placeholder="Real posts written in the business's own voice. Separate each one with a blank line."
+              style={{ ...textareaStyle, minHeight: "120px" }}
+            />
+            <p style={hintStyle}>
+              Separate each example with a blank line. The AI imitates these.
+            </p>
+          </div>
         </div>
 
         <button

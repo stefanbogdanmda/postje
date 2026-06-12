@@ -17,10 +17,13 @@ function getNextTuesday(): string {
 }
 
 export default function GeneratePreviewClient({
-  clientId,
+  clients,
 }: {
-  clientId: string
+  clients: Array<{ id: string; businessName: string }>
 }) {
+  const [selectedClientId, setSelectedClientId] = useState<string>(
+    clients[0]?.id ?? ""
+  )
   const [posts, setPosts] = useState<
     Array<{
       scheduledDate: string
@@ -43,6 +46,11 @@ export default function GeneratePreviewClient({
   const [loading, setLoading] = useState(false)
 
   async function handleGenerate() {
+    if (!selectedClientId) {
+      setError("Select a client first.")
+      return
+    }
+
     setLoading(true)
     setError(null)
     setPosts(null)
@@ -55,7 +63,7 @@ export default function GeneratePreviewClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId,
+          clientId: selectedClientId,
           startDate,
         }),
       })
@@ -74,7 +82,7 @@ export default function GeneratePreviewClient({
       // Step 2: Fetch persisted posts from DB
       const endDate = genData.endDate
       const postsResponse = await fetch(
-        `/api/posts?clientId=${clientId}&startDate=${startDate}&endDate=${endDate}`
+        `/api/posts?clientId=${selectedClientId}&startDate=${startDate}&endDate=${endDate}`
       )
       const postsData = await postsResponse.json()
 
@@ -97,24 +105,70 @@ export default function GeneratePreviewClient({
         Post Generation Preview
       </h1>
       <p style={{ color: "#666", marginBottom: "24px" }}>
-        Generate a week of posts for this client. Takes ~15-30 seconds (two AI
+        Generate a week of posts for a client. Takes ~15-30 seconds (two AI
         calls).
       </p>
 
-      <button
-        onClick={handleGenerate}
-        disabled={loading}
-        style={{
-          padding: "8px 16px",
-          backgroundColor: loading ? "#999" : "#1a1a1a",
-          color: "#fff",
-          border: "none",
-          borderRadius: "4px",
-          cursor: loading ? "not-allowed" : "pointer",
-        }}
-      >
-        {loading ? "Generating..." : "Generate Week"}
-      </button>
+      {clients.length === 0 ? (
+        <p
+          style={{
+            padding: "16px",
+            backgroundColor: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "4px",
+            color: "#92400e",
+          }}
+        >
+          No clients yet. Add a client first, then come back to generate posts.
+        </p>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <label htmlFor="clientPicker" style={{ fontSize: "14px" }}>
+            Client:
+          </label>
+          <select
+            id="clientPicker"
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            disabled={loading}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "4px",
+              fontSize: "14px",
+              minWidth: "220px",
+            }}
+          >
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.businessName}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: loading ? "#999" : "#1a1a1a",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Generating..." : "Generate Week"}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div
