@@ -50,6 +50,13 @@
       "when": 1781258161247,
       "tag": "0006_nasty_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781272474649,
+      "tag": "0007_brave_abomination",
+      "breakpoints": true
     }
   ]
 }
