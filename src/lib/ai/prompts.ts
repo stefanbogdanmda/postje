@@ -15,9 +15,9 @@ export function buildPlanSystemPrompt(photoCount: number): string {
 You will receive a client profile. Based on it, create a 7-day content plan (Tuesday through Monday).
 
 Rules:
-- No two days may have the same angle. Same topic is fine if the angle is different (e.g. coffee-as-morning-ritual vs coffee-as-afternoon-pickup).
-- Mix content types across the week: product highlights, atmosphere/vibe, community moments, behind-the-scenes, seasonal.
-- Monday posts acknowledge the café is closed (anticipation-style: "see you tomorrow", a recipe tip, or a personal moment).
+- No two days may have the same angle. Same topic is fine if the angle is different (e.g. product-as-morning-ritual vs product-as-afternoon-treat).
+- Mix content types across the week: product/service highlights, atmosphere/vibe, community moments, behind-the-scenes, seasonal.
+- If the business is closed on a day this week (judge from its opening hours), that day's post should acknowledge the closure naturally — anticipation-style ("see you tomorrow"), a useful tip, or a personal moment. Do not invent closures the hours don't support.
 - Each day must have a clear theme, a distinct angle, platform differences, and a tone note.${photoRules}
 
 Respond with valid JSON only. No markdown, no explanation outside the JSON.`
@@ -85,17 +85,14 @@ Voice rules:
 - ${client.ownerPersona.style}
 - Write in Dutch.
 - No sentence over 15 words. Count before you write. This is a hard rule, not a suggestion.
-- Use emojis sparingly — one or two per post maximum, only ☕ and 🌿 style (warm, natural).
+- Use emojis sparingly — one or two per post maximum — and only ones that fit this business naturally. Never decorative.
 - Never use these phrases: ${client.bannedPhrases.map((p) => `"${p}"`).join(", ")}
 - Instagram captions can be slightly longer and more visual/poetic (3–5 sentences).
 - Facebook posts: 2–3 sentences maximum. Only use 4 sentences for genuine storytelling. Never more than 4.
 
 IMPORTANT: Write as ${client.ownerPersona.name} would actually write. Short. Natural. No marketing speak. No AI-sounding Dutch.${examplePostsSection}
 
-Example of a GOOD Facebook post (this is the right length and tone):
-"Erwtensoep vandaag. Echt herfst buiten ☕ Wie komt er opwarmen?"
-
-That's it. Three short sentences. Done. No customer quotes, no callbacks, no elaborate descriptions.
+A good Facebook post is two or three short sentences, plainly stated, with no marketing language, no customer quotes, no callbacks, and no elaborate descriptions. If example posts from this business are shown above, treat them as the gold standard for voice and length and match them closely.
 
 For each day, also include:
 - "reasoning": a short English note explaining WHY you chose this content and angle (helps the human reviewer understand your thinking)
@@ -129,9 +126,10 @@ export function buildWriteUserPrompt(
 ${planText}
 
 Business context:
-- Menu: ${client.menuHighlights.join(", ")}
+- Offerings: ${client.menuHighlights.join(", ")}
 - Customers: ${client.targetCustomers.join(", ")}
-- Closed Monday (Monday post = anticipation or personal content)
+- Opening hours: ${client.hours}
+- If the business is closed on any day below (judge from the hours), that day's post should acknowledge the closure — anticipation or a personal moment — not pretend it's open.
 
 For photo days: write posts that are grounded in what the photo shows. Don't just describe the photo — tell the brand's story through it. Combine what you see with the brand voice and the mood the photo conveys.
 

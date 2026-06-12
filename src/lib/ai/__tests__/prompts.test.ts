@@ -74,6 +74,12 @@ describe("buildPlanSystemPrompt", () => {
     expect(prompt).toContain("valid JSON only")
   })
 
+  it("does not assume the business is a café or closes on Monday", () => {
+    const prompt = buildPlanSystemPrompt(0)
+    expect(prompt).not.toContain("café is closed")
+    expect(prompt).not.toContain("Monday posts acknowledge")
+  })
+
   it("omits photo rules when no photos available", () => {
     const prompt = buildPlanSystemPrompt(0)
     expect(prompt).not.toContain("Photo rules")
@@ -248,6 +254,13 @@ describe("buildWriteSystemPrompt", () => {
     expect(prompt).toContain("your business")
     expect(prompt).not.toContain("your café")
   })
+
+  it("does not hardcode café-specific emojis or the soup example", () => {
+    const prompt = buildWriteSystemPrompt(testClient)
+    expect(prompt).not.toContain("☕")
+    expect(prompt).not.toContain("🌿")
+    expect(prompt).not.toContain("Erwtensoep")
+  })
 })
 
 describe("buildWriteUserPrompt", () => {
@@ -281,9 +294,11 @@ describe("buildWriteUserPrompt", () => {
     expect(prompt).toContain("local regulars, families, remote workers")
   })
 
-  it("mentions Monday closure", () => {
+  it("includes the business hours and a generic closure rule, not a hardcoded day", () => {
     const prompt = buildWriteUserPrompt(testClient, testPlan, [testPhoto])
-    expect(prompt).toContain("Closed Monday")
+    expect(prompt).toContain("Tue–Sun 8:00–17:00")
+    expect(prompt).toContain("closed on any day")
+    expect(prompt).not.toContain("Closed Monday")
   })
 
   it("includes JSON response structure", () => {
