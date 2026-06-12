@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server"
+import { db } from "@/db"
+import {
+  getDeletionRequestByCode,
+  buildDeletionStatusResponse,
+} from "@/lib/meta/data-deletion"
 
 /**
  * Data Deletion Status Check
  *
- * Meta shows users a link to check the status of their deletion request.
- * For v1, we respond that deletion has been processed. When the product
- * scales, this should look up the confirmation code in a database table
- * and return the actual status (pending / completed).
+ * Meta links the user here to check the status of their deletion request. We
+ * look the confirmation code up and report the real state — "pending" while
+ * the operator still has to resolve it via the in-app GDPR flow, "completed"
+ * once resolved, "not_found" for an unknown code. We never claim a deletion
+ * happened when it hasn't.
  */
 export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url)
@@ -19,11 +25,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     )
   }
 
-  return NextResponse.json({
-    confirmation_code: code,
-    status: "completed",
-    message:
-      "Je gegevens bij Postje zijn verwijderd. " +
-      "Als je vragen hebt, neem contact op via privacy@postje.nl.",
-  })
+  const request = await getDeletionRequestByCode(db, code)
+  const { httpStatus, body } = buildDeletionStatusResponse(request, code)
+  return NextResponse.json(body, { status: httpStatus })
 }

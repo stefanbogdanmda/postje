@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { createHmac, randomUUID } from "node:crypto"
+import { db } from "@/db"
+import { recordDeletionRequest } from "@/lib/meta/data-deletion"
 
 /**
  * Meta Data Deletion Callback
@@ -106,12 +108,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     const confirmationCode = randomUUID()
     const statusUrl = `${getAppBaseUrl()}/api/meta/data-deletion/status?code=${confirmationCode}`
 
-    // In a production system with many users, we would store this
-    // confirmation code in the database alongside the Meta user_id
-    // and process deletion async. For v1 with a handful of clients,
-    // the admin handles deletion through the app's own account
-    // deletion flow — this endpoint satisfies Meta's compliance
-    // requirement that a callback URL exists and responds correctly.
+    // Record the request so the status URL can report its real state. There is
+    // no mapping from Meta's user_id to a Postje account, so actual deletion is
+    // handled by the operator via the in-app GDPR flow; the request stays
+    // "received" until then. We persist before responding so we never hand back
+    // a confirmation code we can't honour.
+    await recordDeletionRequest(db, {
+      metaUserId: payload.user_id,
+      confirmationCode,
+    })
 
     // Meta expects exactly this JSON shape:
     return NextResponse.json({

@@ -43,6 +43,13 @@
       "when": 1779196290617,
       "tag": "0005_smiling_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781260156293,
+      "tag": "0006_funny_king_bedlam",
+      "breakpoints": true
     }
   ]
 }
