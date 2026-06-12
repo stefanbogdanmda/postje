@@ -188,6 +188,24 @@ export default function NewClientPage() {
         </div>
 
         <div style={{ marginBottom: "20px" }}>
+          <label htmlFor="postsPerWeek" style={labelStyle}>
+            Posts per week
+          </label>
+          <input
+            id="postsPerWeek"
+            name="postsPerWeek"
+            type="number"
+            min={3}
+            max={6}
+            defaultValue={5}
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            How many days per week to post (3–6). One post per platform each day.
+          </p>
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
           <label htmlFor="logoUrl" style={labelStyle}>
             Logo URL
           </label>

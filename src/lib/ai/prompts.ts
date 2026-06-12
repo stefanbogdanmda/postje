@@ -1,18 +1,21 @@
 import type { ClientProfile, DayPlan, AnalyzedPhoto } from "./types"
 
-export function buildPlanSystemPrompt(photoCount: number): string {
+export function buildPlanSystemPrompt(
+  photoCount: number,
+  postsPerWeek: number
+): string {
   const photoRules =
     photoCount > 0
       ? `\n\nPhoto rules:
-- You have ${photoCount} photo(s) available this week. Assign each photo to a day by setting photoId to the photo's ID. Days without photos get photoId: null.
+- You have ${photoCount} photo(s) available this week. Assign each photo to a posting day by setting photoId to the photo's ID. Days without photos get photoId: null.
 - HARD RULE: No two photo days may be back-to-back (adjacent). Spread them across the week.
 - Match photo mood and content to the day's theme when possible.
-- Every available photo must be assigned to exactly one day.`
+- Assign photos to your posting days. If there are more photos than posting days, use the strongest ones; leaving extra photos unused is fine.`
       : ""
 
   return `You are a social media content planner for small Dutch businesses. Your job is to plan a week of social media posts that feel authentic — as if the business owner wrote them.
 
-You will receive a client profile. Based on it, create a 7-day content plan (Tuesday through Monday).
+You will receive a client profile. Based on it, create a content plan with exactly ${postsPerWeek} posting days, chosen from the week of Tuesday through Monday. You decide which ${postsPerWeek} days to post on — spread them across the week and avoid consecutive days where you can.
 
 Rules:
 - No two days may have the same angle. Same topic is fine if the angle is different (e.g. product-as-morning-ritual vs product-as-afternoon-treat).
@@ -26,6 +29,7 @@ Respond with valid JSON only. No markdown, no explanation outside the JSON.`
 export function buildPlanUserPrompt(
   client: ClientProfile,
   photos: AnalyzedPhoto[],
+  postsPerWeek: number,
   lockedDaysContext: string = ""
 ): string {
   const photoSection =
@@ -69,7 +73,7 @@ Respond with this exact JSON structure:
   ]
 }
 
-Include all 7 days: Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, Monday.${lockedDaysContext}`
+Include exactly ${postsPerWeek} day objects — the posting days you chose from Tuesday–Monday, in chronological order.${lockedDaysContext}`
 }
 
 export function buildWriteSystemPrompt(client: ClientProfile): string {
@@ -146,5 +150,5 @@ Respond with this exact JSON structure:
   ]
 }
 
-Include all 7 days.`
+Write a post for every day in the plan above — no more, no fewer.`
 }

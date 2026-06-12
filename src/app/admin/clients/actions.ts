@@ -7,6 +7,12 @@ import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { sendWelcomeEmail } from "@/lib/welcome-email"
 import { parseLines, parseExamplePosts } from "./parse-voice-fields"
+import { clampPostsPerWeek, DEFAULT_POSTS_PER_WEEK } from "@/lib/posts/config"
+
+function readPostsPerWeek(formData: FormData): number {
+  const raw = formData.get("postsPerWeek")
+  return clampPostsPerWeek(raw ? Number(raw) : DEFAULT_POSTS_PER_WEEK)
+}
 
 interface ActionResult {
   error?: string
@@ -35,6 +41,7 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
   const examplePosts = parseExamplePosts(
     formData.get("examplePosts") as string | null
   )
+  const postsPerWeek = readPostsPerWeek(formData)
 
   // Validate required fields
   if (!email || !email.includes("@")) {
@@ -87,6 +94,7 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
       brandPersonality: brandPersonality?.trim() || null,
       bannedPhrases,
       examplePosts,
+      postsPerWeek,
     })
   } catch {
     // Roll back: delete the user we just created
@@ -154,6 +162,7 @@ export async function updateClient(
   const examplePosts = parseExamplePosts(
     formData.get("examplePosts") as string | null
   )
+  const postsPerWeek = readPostsPerWeek(formData)
 
   if (!businessName || businessName.trim() === "") {
     return { error: "Business name is required." }
@@ -185,6 +194,7 @@ export async function updateClient(
         brandPersonality: brandPersonality?.trim() || null,
         bannedPhrases,
         examplePosts,
+        postsPerWeek,
         updatedAt: new Date(),
       })
       .where(eq(clients.id, clientId))

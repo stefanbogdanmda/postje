@@ -17,6 +17,7 @@ interface EditClientFormProps {
   brandPersonality: string | null
   bannedPhrases: string[]
   examplePosts: string[]
+  postsPerWeek: number
   hasLoggedIn: boolean
 }
 
@@ -34,6 +35,7 @@ export default function EditClientForm({
   brandPersonality,
   bannedPhrases,
   examplePosts,
+  postsPerWeek,
   hasLoggedIn,
 }: EditClientFormProps) {
   const [error, setError] = useState<string | null>(null)
@@ -225,6 +227,24 @@ export default function EditClientForm({
               fontFamily: "inherit",
             }}
           />
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <label htmlFor="postsPerWeek" style={labelStyle}>
+            Posts per week
+          </label>
+          <input
+            id="postsPerWeek"
+            name="postsPerWeek"
+            type="number"
+            min={3}
+            max={6}
+            defaultValue={postsPerWeek}
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            How many days per week to post (3–6). One post per platform each day.
+          </p>
         </div>
 
         <div style={{ marginBottom: "20px" }}>

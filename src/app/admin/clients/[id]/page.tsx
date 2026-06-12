@@ -40,6 +40,7 @@ export default async function EditClientPage({
         brandPersonality: clients.brandPersonality,
         bannedPhrases: clients.bannedPhrases,
         examplePosts: clients.examplePosts,
+        postsPerWeek: clients.postsPerWeek,
         email: users.email,
         hasLoggedIn: users.hasLoggedIn,
       })
@@ -82,6 +83,7 @@ export default async function EditClientPage({
         brandPersonality={client.brandPersonality}
         bannedPhrases={client.bannedPhrases}
         examplePosts={client.examplePosts}
+        postsPerWeek={client.postsPerWeek}
         hasLoggedIn={client.hasLoggedIn}
       />
 
