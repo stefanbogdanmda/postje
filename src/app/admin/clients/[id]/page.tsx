@@ -35,6 +35,11 @@ export default async function EditClientPage({
         businessType: clients.businessType,
         productsServices: clients.productsServices,
         logoUrl: clients.logoUrl,
+        toneOfVoice: clients.toneOfVoice,
+        targetCustomers: clients.targetCustomers,
+        brandPersonality: clients.brandPersonality,
+        bannedPhrases: clients.bannedPhrases,
+        examplePosts: clients.examplePosts,
         email: users.email,
         hasLoggedIn: users.hasLoggedIn,
       })
@@ -72,6 +77,11 @@ export default async function EditClientPage({
         businessType={client.businessType}
         productsServices={client.productsServices}
         logoUrl={client.logoUrl}
+        toneOfVoice={client.toneOfVoice}
+        targetCustomers={client.targetCustomers}
+        brandPersonality={client.brandPersonality}
+        bannedPhrases={client.bannedPhrases}
+        examplePosts={client.examplePosts}
         hasLoggedIn={client.hasLoggedIn}
       />
 

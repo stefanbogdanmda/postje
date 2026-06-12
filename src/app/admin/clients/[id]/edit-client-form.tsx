@@ -12,6 +12,11 @@ interface EditClientFormProps {
   businessType: string | null
   productsServices: string | null
   logoUrl: string | null
+  toneOfVoice: string | null
+  targetCustomers: string | null
+  brandPersonality: string | null
+  bannedPhrases: string[]
+  examplePosts: string[]
   hasLoggedIn: boolean
 }
 
@@ -24,6 +29,11 @@ export default function EditClientForm({
   businessType,
   productsServices,
   logoUrl,
+  toneOfVoice,
+  targetCustomers,
+  brandPersonality,
+  bannedPhrases,
+  examplePosts,
   hasLoggedIn,
 }: EditClientFormProps) {
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +68,20 @@ export default function EditClientForm({
     borderRadius: "6px",
     fontSize: "15px",
     boxSizing: "border-box" as const,
+  }
+
+  const textareaStyle = {
+    ...inputStyle,
+    minHeight: "80px",
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+  }
+
+  const hintStyle = {
+    color: "#999",
+    fontSize: "12px",
+    marginTop: "4px",
+    marginBottom: 0,
   }
 
   return (
@@ -203,7 +227,7 @@ export default function EditClientForm({
           />
         </div>
 
-        <div style={{ marginBottom: "28px" }}>
+        <div style={{ marginBottom: "20px" }}>
           <label htmlFor="logoUrl" style={labelStyle}>
             Logo URL
           </label>
@@ -215,6 +239,93 @@ export default function EditClientForm({
             placeholder="https://..."
             style={inputStyle}
           />
+        </div>
+
+        <div
+          style={{
+            borderTop: "1px solid #eee",
+            marginBottom: "28px",
+            paddingTop: "20px",
+          }}
+        >
+          <h2 style={{ fontSize: "15px", fontWeight: 600, margin: "0 0 4px" }}>
+            Brand voice
+          </h2>
+          <p style={{ color: "#666", fontSize: "12px", margin: "0 0 20px" }}>
+            These shape how the AI writes for this client. Leave any field blank
+            to fall back to sensible defaults.
+          </p>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="toneOfVoice" style={labelStyle}>
+              Tone of voice
+            </label>
+            <textarea
+              id="toneOfVoice"
+              name="toneOfVoice"
+              defaultValue={toneOfVoice ?? ""}
+              placeholder="Warm, direct, local. No corporate marketing language."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="targetCustomers" style={labelStyle}>
+              Target customers
+            </label>
+            <textarea
+              id="targetCustomers"
+              name="targetCustomers"
+              defaultValue={targetCustomers ?? ""}
+              placeholder="Who are the customers? One per line or comma-separated."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="brandPersonality" style={labelStyle}>
+              Brand personality
+            </label>
+            <textarea
+              id="brandPersonality"
+              name="brandPersonality"
+              defaultValue={brandPersonality ?? ""}
+              placeholder="How does the owner come across? e.g. friendly, no-nonsense, playful."
+              style={textareaStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label htmlFor="bannedPhrases" style={labelStyle}>
+              Banned phrases
+            </label>
+            <textarea
+              id="bannedPhrases"
+              name="bannedPhrases"
+              defaultValue={bannedPhrases.join("\n")}
+              placeholder={"One phrase per line\nculinair\ngeniet van"}
+              style={textareaStyle}
+            />
+            <p style={hintStyle}>
+              One phrase per line. The AI will never use these.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 0 }}>
+            <label htmlFor="examplePosts" style={labelStyle}>
+              Example posts
+            </label>
+            <textarea
+              id="examplePosts"
+              name="examplePosts"
+              defaultValue={examplePosts.join("\n\n")}
+              placeholder="Real posts written in the business's own voice. Separate each one with a blank line."
+              style={{ ...textareaStyle, minHeight: "120px" }}
+            />
+            <p style={hintStyle}>
+              Separate each example with a blank line. The AI imitates these.
+            </p>
+          </div>
         </div>
 
         <button
