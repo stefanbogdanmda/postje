@@ -1,8 +1,13 @@
 import { and, eq, lt, isNull, isNotNull, sql, count } from "drizzle-orm"
-import { db as appDb } from "@/db"
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
 
-type Db = typeof appDb
+type Db = PgDatabase<
+  PgQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
 
 // ── Interfaces ──────────────────────────────────
 
@@ -131,22 +136,25 @@ export async function findCalibrationClients(
 ): Promise<CalibrationClient[]> {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
 
+  // The calibration window starts at calibrationStartDate when the operator has
+  // set one (so it can be extended per client), otherwise at the client's
+  // createdAt. COALESCE handles both, including older clients created before
+  // calibrationStartDate was populated on signup.
   const clientRows = await db
     .select({
       clientId: schema.clients.id,
       businessName: schema.clients.businessName,
       calibrationStartDate: schema.clients.calibrationStartDate,
+      createdAt: schema.clients.createdAt,
     })
     .from(schema.clients)
     .where(
-      and(
-        isNotNull(schema.clients.calibrationStartDate),
-        sql`${schema.clients.calibrationStartDate} > ${fourteenDaysAgo}`
-      )
+      sql`COALESCE(${schema.clients.calibrationStartDate}, ${schema.clients.createdAt}) > ${fourteenDaysAgo}`
     )
 
   const results: CalibrationClient[] = []
   for (const row of clientRows) {
+    const start = row.calibrationStartDate ?? row.createdAt
     const pendingCount = await db
       .select({ count: count() })
       .from(schema.posts)
@@ -160,10 +168,9 @@ export async function findCalibrationClients(
     results.push({
       clientId: row.clientId,
       businessName: row.businessName,
-      calibrationStartDate: row.calibrationStartDate!,
+      calibrationStartDate: start,
       daysInCalibration: Math.round(
-        (Date.now() - row.calibrationStartDate!.getTime()) /
-          (1000 * 60 * 60 * 24)
+        (Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)
       ),
       pendingPostCount: Number(pendingCount[0]?.count ?? 0),
     })
