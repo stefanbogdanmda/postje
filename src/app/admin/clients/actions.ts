@@ -95,6 +95,9 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
       bannedPhrases,
       examplePosts,
       postsPerWeek,
+      // Start the 2-week calibration window now. The operator can push this
+      // date later to extend calibration for a client that needs more spot-checks.
+      calibrationStartDate: new Date(),
     })
   } catch {
     // Roll back: delete the user we just created
