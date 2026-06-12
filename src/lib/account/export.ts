@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
+import type { PostStatus } from "@/lib/posts/config"
 
 type Db = PgDatabase<
   PgQueryResultHKT,
@@ -46,7 +47,7 @@ export interface PostExport {
   id: string
   platform: "instagram" | "facebook"
   scheduledDate: string
-  status: "draft" | "approved" | "rejected" | "published" | "failed"
+  status: PostStatus
   content: string
   photoId: string | null
   reasoning: string

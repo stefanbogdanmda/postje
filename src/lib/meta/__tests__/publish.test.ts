@@ -238,6 +238,41 @@ describe("publishPostToMeta — orchestrator", () => {
     expect(attempts[0].errorClass).toBe("permanent-token")
   })
 
+  it("publishes to Meta only once when two calls race (claim lock)", async () => {
+    const post = await seedApprovedPost({ platform: "facebook", withPhoto: false })
+    let calls = 0
+    const fetcher = vi.fn(async () => {
+      calls++
+      return new Response(JSON.stringify({ id: "FB_ONCE" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+
+    // Two concurrent publish attempts for the same post (e.g. cron overlapping
+    // with a manual "Publish now").
+    const [a, b] = await Promise.all([
+      publishPostToMeta(db, post.id, "cron", fetcher),
+      publishPostToMeta(db, post.id, "admin-1", fetcher),
+    ])
+
+    // Exactly one POST to Meta — no duplicate public post.
+    expect(calls).toBe(1)
+
+    const successes = [a, b].filter((r) => r.success)
+    const losers = [a, b].filter((r) => !r.success)
+    expect(successes).toHaveLength(1)
+    expect(losers).toHaveLength(1)
+    expect(losers[0].guardFailure).toBe("already-publishing")
+
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("published")
+
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0].success).toBe(true)
+  })
+
   it("publishes an Instagram post via the two-step flow", async () => {
     const post = await seedApprovedPost({ platform: "instagram", withPhoto: true })
     const fetcher = vi

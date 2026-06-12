@@ -106,7 +106,14 @@ export const posts = pgTable(
     platform: text("platform", { enum: ["instagram", "facebook"] }).notNull(),
     scheduledDate: text("scheduledDate").notNull(),
     status: text("status", {
-      enum: ["draft", "approved", "rejected", "published", "failed"],
+      enum: [
+        "draft",
+        "approved",
+        "publishing",
+        "rejected",
+        "published",
+        "failed",
+      ],
     })
       .notNull()
       .default("draft"),
