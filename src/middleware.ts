@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-// Proxy runs before matched routes and can do cheap session-cookie checks.
-// It cannot replace route/page authz: role and ownership checks stay server-side.
+// Middleware runs before matched routes and does a cheap session-cookie check.
+// It cannot replace route/page authz: role and ownership checks stay server-side
+// (see requireClientAccess/requireAdmin). This is defense-in-depth only — it
+// redirects unauthenticated visitors away from protected areas at the edge, so a
+// future route that forgets its own auth() call is not silently public.
 
 function getSessionCookie(req: NextRequest): string | undefined {
   return (
@@ -11,7 +14,7 @@ function getSessionCookie(req: NextRequest): string | undefined {
   )
 }
 
-export function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname
   const hasSession = !!getSessionCookie(req)
 
