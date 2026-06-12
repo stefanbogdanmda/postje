@@ -6,6 +6,7 @@ import { users, clients } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { sendWelcomeEmail } from "@/lib/welcome-email"
+import { parseLines, parseExamplePosts } from "./parse-voice-fields"
 
 interface ActionResult {
   error?: string
@@ -25,6 +26,15 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
   const productsServices =
     (formData.get("productsServices") as string) || null
   const logoUrl = (formData.get("logoUrl") as string) || null
+  const toneOfVoice = (formData.get("toneOfVoice") as string) || null
+  const targetCustomers = (formData.get("targetCustomers") as string) || null
+  const brandPersonality = (formData.get("brandPersonality") as string) || null
+  const bannedPhrases = parseLines(
+    formData.get("bannedPhrases") as string | null
+  )
+  const examplePosts = parseExamplePosts(
+    formData.get("examplePosts") as string | null
+  )
 
   // Validate required fields
   if (!email || !email.includes("@")) {
@@ -72,6 +82,11 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
       businessType: businessType?.trim() || null,
       productsServices: productsServices?.trim() || null,
       logoUrl: logoUrl?.trim() || null,
+      toneOfVoice: toneOfVoice?.trim() || null,
+      targetCustomers: targetCustomers?.trim() || null,
+      brandPersonality: brandPersonality?.trim() || null,
+      bannedPhrases,
+      examplePosts,
     })
   } catch {
     // Roll back: delete the user we just created
@@ -130,6 +145,15 @@ export async function updateClient(
   const productsServices =
     (formData.get("productsServices") as string) || null
   const logoUrl = (formData.get("logoUrl") as string) || null
+  const toneOfVoice = (formData.get("toneOfVoice") as string) || null
+  const targetCustomers = (formData.get("targetCustomers") as string) || null
+  const brandPersonality = (formData.get("brandPersonality") as string) || null
+  const bannedPhrases = parseLines(
+    formData.get("bannedPhrases") as string | null
+  )
+  const examplePosts = parseExamplePosts(
+    formData.get("examplePosts") as string | null
+  )
 
   if (!businessName || businessName.trim() === "") {
     return { error: "Business name is required." }
@@ -156,6 +180,11 @@ export async function updateClient(
         businessType: businessType?.trim() || null,
         productsServices: productsServices?.trim() || null,
         logoUrl: logoUrl?.trim() || null,
+        toneOfVoice: toneOfVoice?.trim() || null,
+        targetCustomers: targetCustomers?.trim() || null,
+        brandPersonality: brandPersonality?.trim() || null,
+        bannedPhrases,
+        examplePosts,
         updatedAt: new Date(),
       })
       .where(eq(clients.id, clientId))
