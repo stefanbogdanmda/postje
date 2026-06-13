@@ -10,7 +10,7 @@ Drop this whole document into a fresh chat to continue Postje's operational impr
 
 1. Open the PR via GitHub web UI (body draft at `.pr-body-postgres.md` in the repo root). The `gh` CLI is not installed locally, so the PR can't be opened from the terminal.
 2. Manually update `.env.example` to include `DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require` (Claude's permissions block writing to `.env*` files — this has to be a human edit).
-3. Smoke-test in the browser: `npm run dev`, then `http://localhost:3000/login`, enter `stefanbogdanmda@gmail.com`, magic-link login, click around `/admin`. Existing browser cookies from before the migration will cause `ERR_TOO_MANY_REDIRECTS` until cleared (incognito works too).
+3. Smoke-test in the browser: `npm run dev`, then `http://localhost:3000/login`, enter `admin@example.com`, magic-link login, click around `/admin`. Existing browser cookies from before the migration will cause `ERR_TOO_MANY_REDIRECTS` until cleared (incognito works too).
 4. Merge to `main`.
 
 **Until that PR is merged**, future improvement plans should be written on branches based on `main` AS IT IS NOW (still SQLite-based) and rebased onto the merged Postgres state. Alternatively, base new branches on `feat/postgres-migration` directly — that's fine too as long as the Postgres branch is the parent.
@@ -21,7 +21,7 @@ Drop this whole document into a fresh chat to continue Postje's operational impr
 
 - Read `CLAUDE.md` in the repo root first. That's the project's operating manual.
 - Read `docs/social-ai-spec.md` for the product vision.
-- The developer (Stefan, `stefanbogdanmda@gmail.com`) is learning while building. Teaching mode is always on. When you use a technical term for the first time in a conversation, define it briefly. Check understanding rather than assume it. Plain English first, code second.
+- The developer (Stefan, `admin@example.com`) is learning while building. Teaching mode is always on. When you use a technical term for the first time in a conversation, define it briefly. Check understanding rather than assume it. Plain English first, code second.
 - Tech stack: Next.js 16 (App Router) + TypeScript + Drizzle ORM + **Neon Postgres** (NOT SQLite — that just got migrated away) + Auth.js 5 (magic links via Resend) + Vercel Cron + `@vercel/blob` for photos. Vitest 4 for tests. PGlite for in-memory test DB.
 - The user is on **Windows + PowerShell**. Many shell commands need PowerShell syntax (`Remove-Item` not `rm`), or use the Bash tool for POSIX-style commands.
 - Free-tier budget. No new paid services unless they unblock revenue. Don't propose `dotenv-cli`, `vercel`-only features beyond the marketplace free tier, etc.

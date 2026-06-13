@@ -2134,7 +2134,7 @@ Verify by running `npm run dev` and confirming no env-related startup error.
 
 - [ ] **Step 2: Prepare a test post**
 
-1. Sign in as admin (`stefanbogdanmda@gmail.com`).
+1. Sign in as admin (`admin@example.com`).
 2. Confirm a test client (Café Test Arnhem, or similar) has an active Meta connection from the #5a flow.
 3. Either run `npm run seed:cafe` to seed posts, or generate a fresh batch via the admin generate-preview tool.
 4. Sign in as the client (or impersonate via the test flow) and approve at least one Facebook post and one Instagram post.

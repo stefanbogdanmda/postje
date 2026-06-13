@@ -217,7 +217,7 @@ Setup:
 
 1. **Create the throwaway Page** — same as Step 1, but on your own personal FB account. Name + category don't matter. Skip all the optional setup screens.
 2. **Add yourself as an App tester** — same as Step 5a, but enter your own name. Accept the invite on your Facebook notifications.
-3. *(Optional IG side)* If you want to test IG too: create a fresh IG account using the Gmail `+` trick (`stefanbogdanmda+dryrun@gmail.com` lands in your real inbox but counts as new everywhere else), switch it to Business, link it to your throwaway Page. Then add it as an Instagram tester (Step 5b) and accept.
+3. *(Optional IG side)* If you want to test IG too: create a fresh IG account using the Gmail `+` trick (`admin+dryrun@example.com` lands in your real inbox but counts as new everywhere else), switch it to Business, link it to your throwaway Page. Then add it as an Instagram tester (Step 5b) and accept.
 
 Now run the smoke test below using your own credentials first. When it works end to end on your throwaway Page, you know the code is solid — repeat with Tommy.
 

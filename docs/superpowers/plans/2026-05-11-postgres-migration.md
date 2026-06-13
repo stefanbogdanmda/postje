@@ -1475,7 +1475,7 @@ git commit -m "test: fix call sites surfaced by Postgres migration"
 npm run seed:admin
 ```
 
-Expected: a row in `users` for `stefanbogdanmda@gmail.com` with role `admin`. (Adjust the email in `scripts/seed-admin.ts` if it's hardcoded to a different one.)
+Expected: a row in `users` for `admin@example.com` with role `admin`. (Adjust the email in `scripts/seed-admin.ts` if it's hardcoded to a different one.)
 
 - [ ] **Step 9.2: Start the dev server**
 
@@ -1487,7 +1487,7 @@ Expected: server listens on `http://localhost:3000` without errors. The terminal
 
 - [ ] **Step 9.3: Smoke-test the magic link login**
 
-In a browser, open `http://localhost:3000/login`. Enter `stefanbogdanmda@gmail.com`. Click the magic link in your inbox. Expected: you land at `/admin`. The page lists you in the users table.
+In a browser, open `http://localhost:3000/login`. Enter `admin@example.com`. Click the magic link in your inbox. Expected: you land at `/admin`. The page lists you in the users table.
 
 - [ ] **Step 9.4: Smoke-test client management**
 

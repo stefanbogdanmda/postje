@@ -1364,7 +1364,7 @@ In `.env.local`, set:
 
 ```
 CRON_SECRET=<generated value — run `openssl rand -hex 32` to make one>
-ADMIN_EMAIL=stefanbogdanmda@gmail.com
+ADMIN_EMAIL=admin@example.com
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -1412,7 +1412,7 @@ curl -i http://localhost:3000/api/cron/check-stale-posts \
 Expected:
 - HTTP 200
 - Response body: `{"skipped":false,"alertsSent":1,"alertsFailed":0}`
-- Email arrives in stefanbogdanmda@gmail.com (or `ADMIN_EMAIL`) within ~30s
+- Email arrives in admin@example.com (or `ADMIN_EMAIL`) within ~30s
 - Re-query the DB: that post's `alertedAt` is now set to ~now
 
 - [ ] **Step 9.7: Hit the endpoint a second time (idempotency)**
