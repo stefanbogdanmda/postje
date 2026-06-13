@@ -273,6 +273,28 @@ describe("publishPostToMeta — orchestrator", () => {
     expect(attempts[0].success).toBe(true)
   })
 
+  it("does not strand an Instagram post in 'publishing' when the connection has no igUserId", async () => {
+    const { metaConnections } = await import("@/db/schema")
+    // beforeEach seeded a connection with an igUserId; null it out for this case.
+    await db
+      .update(metaConnections)
+      .set({ instagramBusinessId: null })
+      .where(eq(metaConnections.clientId, CLIENT_ID))
+    const post = await seedApprovedPost({ platform: "instagram", withPhoto: true })
+    const fetcher = vi.fn()
+
+    const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
+
+    expect(result.success).toBe(false)
+    expect(result.guardFailure).toBe("no-connection")
+    expect(fetcher).not.toHaveBeenCalled()
+    // Must remain 'approved' (claim happens AFTER this guard) — never stuck in 'publishing'.
+    const updated = (await db.select().from(posts).where(eq(posts.id, post.id)))[0]
+    expect(updated.status).toBe("approved")
+    const attempts = await db.select().from(publishAttempts).where(eq(publishAttempts.postId, post.id))
+    expect(attempts).toHaveLength(0)
+  })
+
   it("publishes an Instagram post via the two-step flow", async () => {
     const post = await seedApprovedPost({ platform: "instagram", withPhoto: true })
     const fetcher = vi

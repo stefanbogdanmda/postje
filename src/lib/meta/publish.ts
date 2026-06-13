@@ -176,6 +176,12 @@ export async function publishPostToMeta(
   if (row.platform === "instagram" && !row.photoUrl) {
     return { success: false, guardFailure: "ig-no-photo" }
   }
+  // Instagram needs the linked IG Business account id. Check it BEFORE the
+  // claim below — otherwise a claimed post with no igUserId would be left stuck
+  // in "publishing" with nothing to move it back.
+  if (row.platform === "instagram" && !row.igUserId) {
+    return { success: false, guardFailure: "no-connection" }
+  }
 
   // Claim the post before calling Meta: atomically move approved -> publishing.
   // Only the invocation that wins this update proceeds, so a cron run and a
@@ -203,8 +209,11 @@ export async function publishPostToMeta(
         fetcher
       )
     } else {
+      // Guaranteed non-null by the pre-claim guard above; throw (rather than
+      // return) on the impossible path so a claimed post is never left stuck in
+      // "publishing" — the catch below records the failure and flips to "failed".
       if (!row.igUserId) {
-        return { success: false, guardFailure: "no-connection" }
+        throw new Error("Instagram connection is missing instagramBusinessId")
       }
       metaPostId = await publishToInstagram(
         { igUserId: row.igUserId, accessToken },
