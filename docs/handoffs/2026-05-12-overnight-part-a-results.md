@@ -61,7 +61,7 @@ Yes. `npm run db:migrate` succeeded on Neon dev. Production starts clean and app
 ### What you need to do
 
 1. Open the PR using the URL above (or paste from `.pr-body-rate-limit.md` into the GitHub UI).
-2. Smoke-test: try requesting 6 magic links for `stefanbogdanmda+throttle@gmail.com` within 15 minutes. Resend dashboard should show 5 sends, not 6.
+2. Smoke-test: try requesting 6 magic links for `admin+throttle@example.com` within 15 minutes. Resend dashboard should show 5 sends, not 6.
 3. Merge.
 
 ### Spec + plan

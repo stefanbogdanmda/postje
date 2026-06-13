@@ -243,7 +243,7 @@ These match the existing limits exactly. They live in `src/lib/auth/throttle.ts`
 
 ### Production smoke (post-deploy)
 
-After Vercel deploy: send 6 magic-link requests for `stefanbogdanmda+throttle@gmail.com` within 5 minutes; confirm Resend dashboard shows 5 sends not 6; confirm `auth_throttle` row count.
+After Vercel deploy: send 6 magic-link requests for `admin+throttle@example.com` within 5 minutes; confirm Resend dashboard shows 5 sends not 6; confirm `auth_throttle` row count.
 
 ## 9. Environment variables
 

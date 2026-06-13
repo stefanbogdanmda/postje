@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-11
 **Branch reviewed:** `feat/postgres-migration`
-**Scope:** Full codebase at `c:\Users\stefa\projects\social-ai`
+**Scope:** Full codebase at `c:\Users\user\projects\social-ai`
 **Reviewer:** architect agent (read-only analysis, no code changes)
 
 ---
