@@ -34,9 +34,9 @@ Drop this whole document into a fresh chat to continue Postje's operational impr
 |---|---|
 | `docs/superpowers/specs/2026-05-11-part-a-improvements-sequencing.md` | Master sequencing doc — the 5 Part A improvements in order. Postgres is #1, already done. |
 | `docs/superpowers/plans/2026-05-11-postgres-migration.md` | The detailed Postgres plan that just shipped. Useful as a template for plan structure: bite-sized TDD steps, frequent commits, spec/quality review per task. |
-| `~/.claude/projects/c--Users-stefa-projects-social-ai/memory/project_feature_backlog.md` | NET-NEW features (Part B from earlier research). Do NOT confuse with Part A improvements. Reference only when user asks "what feature should we build next" — for now, finish Part A first. |
-| `~/.claude/projects/c--Users-stefa-projects-social-ai/memory/feedback_frontend_design_skill.md` | Reminder: always invoke `frontend-design` skill for real UI features, not just client-facing ones. |
-| `~/.claude/projects/c--Users-stefa-projects-social-ai/memory/feedback_no_secrets_in_chat.md` | Reminder: never ask the user to paste secrets into chat. |
+| `~/.claude/projects/c--Users-user-projects-social-ai/memory/project_feature_backlog.md` | NET-NEW features (Part B from earlier research). Do NOT confuse with Part A improvements. Reference only when user asks "what feature should we build next" — for now, finish Part A first. |
+| `~/.claude/projects/c--Users-user-projects-social-ai/memory/feedback_frontend_design_skill.md` | Reminder: always invoke `frontend-design` skill for real UI features, not just client-facing ones. |
+| `~/.claude/projects/c--Users-user-projects-social-ai/memory/feedback_no_secrets_in_chat.md` | Reminder: never ask the user to paste secrets into chat. |
 
 ## The four remaining Part A improvements
 
@@ -150,5 +150,5 @@ If any of those fail, surface the failure to the user before proposing new work.
 ## Things explicitly out of scope for the new session
 
 - Vercel deployment setup — separate decision, separate plan.
-- Part B features (Edit-on-Approve, Banned Phrases UI, etc.) — see `~/.claude/projects/c--Users-stefa-projects-social-ai/memory/project_feature_backlog.md`. These wait until Part A is done.
+- Part B features (Edit-on-Approve, Banned Phrases UI, etc.) — see `~/.claude/projects/c--Users-user-projects-social-ai/memory/project_feature_backlog.md`. These wait until Part A is done.
 - Refactors that aren't tied to one of the four improvements above. If the codebase smells, capture it as a follow-up issue, don't act on it unprompted.

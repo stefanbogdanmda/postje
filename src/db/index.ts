@@ -6,8 +6,7 @@ import * as schema from "./schema"
 // The Neon serverless Pool talks to the database over a WebSocket. On Node
 // (Vercel's serverless functions) there is no guaranteed global WebSocket, so we
 // hand it the `ws` implementation explicitly. Without this the pool can fail to
-// open a connection on Node — the root cause behind the earlier silent migration
-// failures documented in docs/handoffs/2026-05-14-meta-app-not-active-blocker.md.
+// open a connection on Node — the root cause behind earlier silent migration failures.
 neonConfig.webSocketConstructor = ws
 
 const databaseUrl = process.env.DATABASE_URL

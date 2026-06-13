@@ -1,7 +1,7 @@
 /**
  * Permission scopes requested during the Meta OAuth dialog.
- * Order matches docs/meta-setup.md §10a so the consent dialog asks for
- * exactly the same set we manually grant during dev.
+ * Order is chosen so the consent dialog asks for exactly the same set
+ * we manually grant during dev.
  */
 export const META_OAUTH_SCOPES = [
   "pages_show_list",
