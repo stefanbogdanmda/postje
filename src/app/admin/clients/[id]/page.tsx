@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import Link from "next/link"
 import EditClientForm from "./edit-client-form"
 import MetaConnectionPanel from "@/components/admin/meta-connection-panel"
+import NotifyClientButton from "@/components/admin/notify-client-button"
 import { getConnectionByClient } from "@/lib/meta/repository"
 
 interface EditClientPageProps {
@@ -86,6 +87,8 @@ export default async function EditClientPage({
         postsPerWeek={client.postsPerWeek}
         hasLoggedIn={client.hasLoggedIn}
       />
+
+      <NotifyClientButton clientId={client.id} />
 
       <MetaConnectionPanel
         clientId={client.id}

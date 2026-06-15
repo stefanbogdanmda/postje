@@ -2,8 +2,9 @@
 
 import { auth, signIn } from "@/lib/auth"
 import { db } from "@/db"
-import { users, clients } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { users, clients, posts } from "@/db/schema"
+import { eq, and, count } from "drizzle-orm"
+import { sendPostsReadyEmail } from "@/lib/posts/ready-email"
 import { redirect } from "next/navigation"
 import { sendWelcomeEmail } from "@/lib/welcome-email"
 import { parseLines, parseExamplePosts } from "./parse-voice-fields"
@@ -253,4 +254,56 @@ export async function extractBrandVoiceForClient(
     })
     return { error: "Kon de merkstem niet uithalen. Probeer het opnieuw." }
   }
+}
+
+/**
+ * Notify a client that this week's posts are ready for their review. This is
+ * the trigger that brings a non-technical owner back for their ~5-minute weekly
+ * review (without it the loop has no client-side prompt). Admin-only,
+ * clientId-scoped; sends to the client's own email. Best-effort send.
+ */
+export async function notifyClientPostsReady(
+  clientId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await auth()
+  if (!session || session.user.role !== "admin") {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  const rows = await db
+    .select({ businessName: clients.businessName, email: users.email })
+    .from(clients)
+    .innerJoin(users, eq(clients.userId, users.id))
+    .where(eq(clients.id, clientId))
+    .limit(1)
+  const client = rows[0]
+  if (!client) {
+    return { success: false, error: "Client not found." }
+  }
+
+  const pending = await db
+    .select({ c: count() })
+    .from(posts)
+    .where(and(eq(posts.clientId, clientId), eq(posts.status, "draft")))
+  const pendingCount = Number(pending[0]?.c ?? 0)
+
+  if (pendingCount === 0) {
+    return { success: false, error: "No posts are waiting for review right now." }
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const result = await sendPostsReadyEmail(
+    client.email,
+    client.businessName,
+    pendingCount,
+    appUrl
+  )
+  if (!result.success) {
+    console.error("[notifyClientPostsReady] send failed", {
+      clientId,
+      error: result.error,
+    })
+    return { success: false, error: "Couldn't send the email. Please try again." }
+  }
+  return { success: true }
 }
