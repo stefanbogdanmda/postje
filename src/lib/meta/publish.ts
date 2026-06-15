@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm"
+import { eq, and, lt } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { ExtractTablesWithRelations } from "drizzle-orm"
 import * as schema from "@/db/schema"
@@ -275,4 +275,43 @@ export async function publishPostToMeta(
 
     return { success: false, errorClass, errorMessage: message }
   }
+}
+
+/** A post claimed for publishing should finish in seconds; longer means stuck. */
+export const STALE_PUBLISHING_MS = 10 * 60 * 1000
+
+/**
+ * Recover posts stuck in 'publishing'. The claim-lock moves a post to
+ * 'publishing' before the Meta call; if the process dies between the claim and
+ * the success/failure write, the post is stranded there (the due-query only
+ * picks up 'approved', so nothing retries it). This sweep flips any 'publishing'
+ * post older than `olderThanMs` to 'failed' with a note.
+ *
+ * Deliberately NOT auto-retried: the post may have actually published before
+ * the crash, so retrying could duplicate it. Flipping to 'failed' surfaces it
+ * in the operator's queue to verify on the platform and retry by hand if needed.
+ * Returns the number reclaimed.
+ */
+export async function reclaimStalePublishingPosts(
+  db: Db,
+  now: Date = new Date(),
+  olderThanMs: number = STALE_PUBLISHING_MS
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - olderThanMs)
+  const reclaimed = await db
+    .update(schema.posts)
+    .set({
+      status: "failed",
+      publishError:
+        "Publishing was interrupted. Check Instagram/Facebook before retrying — the post may or may not have gone out.",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.posts.status, "publishing"),
+        lt(schema.posts.updatedAt, cutoff)
+      )
+    )
+    .returning({ id: schema.posts.id })
+  return reclaimed.length
 }
