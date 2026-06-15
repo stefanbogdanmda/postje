@@ -12,6 +12,11 @@ import {
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
 import { validatePosts } from "@/lib/ai/validate-posts"
+import {
+  correctFlaggedPosts,
+  buildCorrectionUserPrompt,
+  type DayRegenerator,
+} from "@/lib/ai/regenerate-flagged"
 import { buildClientProfile } from "@/lib/ai/client-profile"
 import {
   readRejectionCounts,
@@ -247,6 +252,39 @@ export async function POST(request: NextRequest) {
       clientProfile.bannedPhrases
     )
 
+    // Fix any post that tripped a hard guardrail (banned phrase / overlong
+    // sentence) by re-prompting the writer for just that day, instead of
+    // persisting it with a cosmetic warning. Reuses the writer's voice prompt;
+    // bounded per day and never makes a post worse.
+    const regenerateDay: DayRegenerator = async (day, violations) => {
+      const resp = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1500,
+        system: buildWriteSystemPrompt(clientProfile),
+        messages: [
+          { role: "user", content: buildCorrectionUserPrompt(day, violations) },
+        ],
+      })
+      const t = resp.content.find((b) => b.type === "text")
+      if (!t || t.type !== "text") {
+        throw new Error("No text in correction response")
+      }
+      return extractJSON<{ instagramCaption: string; facebookPost: string }>(
+        t.text
+      )
+    }
+
+    const { posts: correctedPosts, correctedDays } = await correctFlaggedPosts(
+      validatedPosts,
+      clientProfile.bannedPhrases,
+      regenerateDay
+    )
+    if (correctedDays.length > 0) {
+      console.log(
+        `[generate-posts] auto-corrected ${correctedDays.length} flagged day(s): ${correctedDays.join(", ")}`
+      )
+    }
+
     // Convert Claude output to per-platform DB rows
     const postRows: Array<{
       clientId: string
@@ -263,7 +301,7 @@ export async function POST(request: NextRequest) {
     let droppedOverCapCount = 0
     const postedDates = new Set<string>()
 
-    for (const post of validatedPosts) {
+    for (const post of correctedPosts) {
       const scheduledDate = dayNameToDate(post.day, startDate)
 
       // Skip posts for locked days — Claude sometimes plans them despite
