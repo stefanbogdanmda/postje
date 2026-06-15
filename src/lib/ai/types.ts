@@ -96,3 +96,18 @@ export interface UploadResult {
   analysisStatus: "succeeded" | "failed"
   error?: string
 }
+
+/**
+ * A draft brand-voice profile extracted from a kickoff-call transcript.
+ * Maps one-to-one onto the clients table's profile columns, plus a `notes`
+ * field (shown to the operator, never saved). Arrays may be empty — that is a
+ * valid, safe result (the generation pipeline merges in defaults downstream).
+ */
+export interface BrandVoiceDraft {
+  toneOfVoice: string
+  targetCustomers: string
+  brandPersonality: string
+  bannedPhrases: string[]
+  examplePosts: string[]
+  notes: string
+}

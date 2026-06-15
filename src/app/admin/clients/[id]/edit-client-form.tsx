@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { updateClient } from "../actions"
+import { updateClient, extractBrandVoiceForClient } from "../actions"
+import type { BrandVoiceDraft } from "@/lib/ai/types"
 
 interface EditClientFormProps {
   clientId: string
@@ -41,6 +42,21 @@ export default function EditClientForm({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Brand-voice fields are controlled so the "Draft from transcript" panel can
+  // apply suggestions into them. They still submit via the form's FormData.
+  const [tone, setTone] = useState(toneOfVoice ?? "")
+  const [target, setTarget] = useState(targetCustomers ?? "")
+  const [personality, setPersonality] = useState(brandPersonality ?? "")
+  const [banned, setBanned] = useState(bannedPhrases.join("\n"))
+  const [examples, setExamples] = useState(examplePosts.join("\n\n"))
+
+  // Transcript-extraction panel
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<BrandVoiceDraft | null>(null)
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -53,6 +69,24 @@ export default function EditClientForm({
       setError(result.error)
     }
     setLoading(false)
+  }
+
+  async function handleExtract() {
+    setExtractError(null)
+    setDraft(null)
+    setExtracting(true)
+    const result = await extractBrandVoiceForClient(clientId, transcript)
+    if (result.error) setExtractError(result.error)
+    else if (result.draft) setDraft(result.draft)
+    setExtracting(false)
+  }
+
+  function applyAll(d: BrandVoiceDraft) {
+    if (d.toneOfVoice) setTone(d.toneOfVoice)
+    if (d.targetCustomers) setTarget(d.targetCustomers)
+    if (d.brandPersonality) setPersonality(d.brandPersonality)
+    if (d.bannedPhrases.length) setBanned(d.bannedPhrases.join("\n"))
+    if (d.examplePosts.length) setExamples(d.examplePosts.join("\n\n"))
   }
 
   const labelStyle = {
@@ -276,6 +310,99 @@ export default function EditClientForm({
             to fall back to sensible defaults.
           </p>
 
+          {/* Draft-from-transcript onboarding helper */}
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "20px",
+              background: "#fafafa",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setPanelOpen((o) => !o)}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "#333" }}
+            >
+              {panelOpen ? "▾" : "▸"} Draft from transcript
+            </button>
+
+            {panelOpen && (
+              <div style={{ marginTop: "14px" }}>
+                <p style={{ color: "#666", fontSize: "12px", margin: "0 0 10px" }}>
+                  Plak het transcript van het kennismakingsgesprek. We maken een
+                  eerste opzet van de merkstem — jij controleert alles voordat je
+                  opslaat.
+                </p>
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  placeholder="Plak hier het transcript…"
+                  style={{ ...textareaStyle, minHeight: "120px" }}
+                />
+                <button
+                  type="button"
+                  onClick={handleExtract}
+                  disabled={extracting}
+                  style={{ marginTop: "10px", padding: "10px 16px", background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", fontSize: "14px", fontWeight: 500, cursor: extracting ? "not-allowed" : "pointer", opacity: extracting ? 0.7 : 1 }}
+                >
+                  {extracting ? "Reading…" : "Extract brand voice"}
+                </button>
+                {extractError && (
+                  <p style={{ color: "#991b1b", fontSize: "13px", marginTop: "10px" }}>{extractError}</p>
+                )}
+
+                {draft && (
+                  <div style={{ marginTop: "16px" }}>
+                    {draft.notes && (
+                      <p style={{ fontSize: "12px", color: "#666", fontStyle: "italic", margin: "0 0 12px" }}>
+                        {draft.notes}
+                      </p>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600 }}>Suggestions</span>
+                      <button
+                        type="button"
+                        onClick={() => applyAll(draft)}
+                        style={{ fontSize: "12px", fontWeight: 600, color: "#1a1a1a", background: "#eee", border: "none", borderRadius: "6px", padding: "6px 12px", cursor: "pointer" }}
+                      >
+                        Apply all
+                      </button>
+                    </div>
+                    {[
+                      { label: "Tone of voice", suggested: draft.toneOfVoice, current: tone, apply: () => setTone(draft.toneOfVoice) },
+                      { label: "Target customers", suggested: draft.targetCustomers, current: target, apply: () => setTarget(draft.targetCustomers) },
+                      { label: "Brand personality", suggested: draft.brandPersonality, current: personality, apply: () => setPersonality(draft.brandPersonality) },
+                      { label: "Banned phrases", suggested: draft.bannedPhrases.join(", "), current: banned.replace(/\n/g, ", "), apply: () => setBanned(draft.bannedPhrases.join("\n")) },
+                      { label: "Example posts", suggested: draft.examplePosts.length ? `${draft.examplePosts.length} quote(s) from the call` : "", current: "", apply: () => setExamples(draft.examplePosts.join("\n\n")) },
+                    ].map((s) => (
+                      <div key={s.label} style={{ border: "1px solid #e5e5e5", borderRadius: "8px", padding: "12px", marginBottom: "8px", background: "#fff" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 600, color: "#333" }}>{s.label}</span>
+                          <button
+                            type="button"
+                            disabled={!s.suggested}
+                            onClick={s.apply}
+                            style={{ fontSize: "12px", color: s.suggested ? "#1a1a1a" : "#bbb", background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "4px 10px", cursor: s.suggested ? "pointer" : "not-allowed", flexShrink: 0 }}
+                          >
+                            Apply
+                          </button>
+                        </div>
+                        <p style={{ fontSize: "13px", color: "#333", margin: "6px 0 0", whiteSpace: "pre-wrap" }}>
+                          {s.suggested || <span style={{ color: "#999" }}>— niets uit het transcript —</span>}
+                        </p>
+                        {s.current && (
+                          <p style={{ fontSize: "12px", color: "#666", margin: "4px 0 0" }}>Huidig: {s.current}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: "20px" }}>
             <label htmlFor="toneOfVoice" style={labelStyle}>
               Tone of voice
@@ -283,7 +410,8 @@ export default function EditClientForm({
             <textarea
               id="toneOfVoice"
               name="toneOfVoice"
-              defaultValue={toneOfVoice ?? ""}
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
               placeholder="Warm, direct, local. No corporate marketing language."
               style={textareaStyle}
             />
@@ -296,7 +424,8 @@ export default function EditClientForm({
             <textarea
               id="targetCustomers"
               name="targetCustomers"
-              defaultValue={targetCustomers ?? ""}
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
               placeholder="Who are the customers? One per line or comma-separated."
               style={textareaStyle}
             />
@@ -309,7 +438,8 @@ export default function EditClientForm({
             <textarea
               id="brandPersonality"
               name="brandPersonality"
-              defaultValue={brandPersonality ?? ""}
+              value={personality}
+              onChange={(e) => setPersonality(e.target.value)}
               placeholder="How does the owner come across? e.g. friendly, no-nonsense, playful."
               style={textareaStyle}
             />
@@ -322,7 +452,8 @@ export default function EditClientForm({
             <textarea
               id="bannedPhrases"
               name="bannedPhrases"
-              defaultValue={bannedPhrases.join("\n")}
+              value={banned}
+              onChange={(e) => setBanned(e.target.value)}
               placeholder={"One phrase per line\nculinair\ngeniet van"}
               style={textareaStyle}
             />
@@ -338,7 +469,8 @@ export default function EditClientForm({
             <textarea
               id="examplePosts"
               name="examplePosts"
-              defaultValue={examplePosts.join("\n\n")}
+              value={examples}
+              onChange={(e) => setExamples(e.target.value)}
               placeholder="Real posts written in the business's own voice. Separate each one with a blank line."
               style={{ ...textareaStyle, minHeight: "120px" }}
             />

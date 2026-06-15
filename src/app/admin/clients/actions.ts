@@ -8,6 +8,8 @@ import { redirect } from "next/navigation"
 import { sendWelcomeEmail } from "@/lib/welcome-email"
 import { parseLines, parseExamplePosts } from "./parse-voice-fields"
 import { clampPostsPerWeek, DEFAULT_POSTS_PER_WEEK } from "@/lib/posts/config"
+import { extractBrandVoice, MIN_TRANSCRIPT_LENGTH } from "@/lib/ai/extract-brand-voice"
+import type { BrandVoiceDraft } from "@/lib/ai/types"
 
 function readPostsPerWeek(formData: FormData): number {
   const raw = formData.get("postsPerWeek")
@@ -209,4 +211,46 @@ export async function updateClient(
     "/admin/clients?success=" +
       encodeURIComponent(`${businessName.trim()} has been updated.`)
   )
+}
+
+/**
+ * Onboarding helper: draft a brand-voice profile from a pasted kickoff-call
+ * transcript. Admin-only, clientId-scoped, and READ-ONLY to the database — it
+ * returns a draft for the operator to review/edit/apply; the existing
+ * updateClient action remains the only thing that writes the profile. The
+ * transcript is used transiently and never stored.
+ */
+export async function extractBrandVoiceForClient(
+  clientId: string,
+  transcript: string
+): Promise<{ draft?: BrandVoiceDraft; error?: string }> {
+  const session = await auth()
+  if (!session || session.user.role !== "admin") {
+    return { error: "Unauthorized" }
+  }
+
+  if (!transcript || transcript.trim().length < MIN_TRANSCRIPT_LENGTH) {
+    return { error: "Dit transcript lijkt te kort om iets uit te halen." }
+  }
+
+  const rows = await db
+    .select({ businessName: clients.businessName })
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .limit(1)
+  const client = rows[0]
+  if (!client) {
+    return { error: "Client not found." }
+  }
+
+  try {
+    const draft = await extractBrandVoice(transcript.trim(), client.businessName)
+    return { draft }
+  } catch (err) {
+    console.error("[extractBrandVoiceForClient] extraction failed", {
+      clientId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return { error: "Kon de merkstem niet uithalen. Probeer het opnieuw." }
+  }
 }
