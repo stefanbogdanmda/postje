@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "unknown error"
     console.error("[admin/delete-user] Deletion failed", { userId, error: message })
     return NextResponse.json(
-      { error: message },
+      { error: "Account deletion failed. Please try again." },
       { status: 500 }
     )
   }

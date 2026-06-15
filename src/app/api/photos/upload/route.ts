@@ -76,8 +76,14 @@ export async function POST(request: NextRequest) {
       photoRow.analyzedAt = now
       analysisStatus = "succeeded"
     } catch (err: unknown) {
+      // Log the real reason server-side; return a generic message to the client
+      // so internal/library error detail isn't exposed (now that source is public).
+      console.error("[photos/upload] Analysis failed", {
+        photoId: photoRow.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
       analysisError =
-        err instanceof Error ? err.message : "Analysis failed"
+        "Photo analysis failed. The photo was uploaded and can be analysed again later."
     }
 
     const result: UploadResult = {
