@@ -307,3 +307,28 @@ export async function notifyClientPostsReady(
   }
   return { success: true }
 }
+
+/**
+ * Reset a client's calibration window — sets calibrationStartDate to now, giving
+ * another 14 days of operator spot-checks. Per the spec, calibration is
+ * extendable per client when rejection rates stay high. Admin-only, scoped.
+ */
+export async function extendCalibration(
+  clientId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await auth()
+  if (!session || session.user.role !== "admin") {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  const updated = await db
+    .update(clients)
+    .set({ calibrationStartDate: new Date(), updatedAt: new Date() })
+    .where(eq(clients.id, clientId))
+    .returning({ id: clients.id })
+
+  if (updated.length === 0) {
+    return { success: false, error: "Client not found." }
+  }
+  return { success: true }
+}

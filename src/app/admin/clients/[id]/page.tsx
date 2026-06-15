@@ -7,6 +7,7 @@ import Link from "next/link"
 import EditClientForm from "./edit-client-form"
 import MetaConnectionPanel from "@/components/admin/meta-connection-panel"
 import NotifyClientButton from "@/components/admin/notify-client-button"
+import CalibrationButton from "@/components/admin/calibration-button"
 import { getConnectionByClient } from "@/lib/meta/repository"
 
 interface EditClientPageProps {
@@ -89,6 +90,8 @@ export default async function EditClientPage({
       />
 
       <NotifyClientButton clientId={client.id} />
+
+      <CalibrationButton clientId={client.id} />
 
       <MetaConnectionPanel
         clientId={client.id}
