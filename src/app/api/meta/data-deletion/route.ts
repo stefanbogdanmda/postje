@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createHmac, randomUUID } from "node:crypto"
 import { db } from "@/db"
 import { recordDeletionRequest } from "@/lib/meta/data-deletion"
+import { rateLimitRequest } from "@/lib/request-rate-limit"
 
 /**
  * Meta Data Deletion Callback
@@ -82,8 +83,15 @@ function parseSignedRequest(
   return payload
 }
 
-export async function POST(req: Request): Promise<NextResponse> {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    // This endpoint is public (Meta calls it server-to-server). A valid request
+    // must be HMAC-signed with our app secret, but rate-limit by IP anyway so a
+    // flood of unsigned/invalid requests can't churn the DB or our CPU. Meta's
+    // real callbacks are low-volume (one per user removal), so this is generous.
+    const rateLimited = await rateLimitRequest(req, "meta-data-deletion", 30, 60_000)
+    if (rateLimited) return rateLimited
+
     const formData = await req.formData()
     const signedRequest = formData.get("signed_request")
 
