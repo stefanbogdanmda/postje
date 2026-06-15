@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { publishToFacebook, publishToInstagram, publishPostToMeta } from "../publish"
+import {
+  publishToFacebook,
+  publishToInstagram,
+  publishPostToMeta,
+  reclaimStalePublishingPosts,
+} from "../publish"
 import { createTestDb, seedTestClient, seedTestPhoto, seedMetaConnection, type TestDb } from "@/test/db"
 import { posts, publishAttempts } from "@/db/schema"
 import { eq } from "drizzle-orm"
@@ -314,5 +319,56 @@ describe("publishPostToMeta — orchestrator", () => {
     const result = await publishPostToMeta(db, post.id, "admin-1", fetcher)
     expect(result.success).toBe(true)
     expect(result.metaPostId).toBe("IG_FINAL")
+  })
+})
+
+describe("reclaimStalePublishingPosts", () => {
+  let rdb: TestDb
+  const CID = "test-client-001"
+  const now = new Date("2026-06-15T12:00:00Z")
+  const old = new Date(now.getTime() - 30 * 60 * 1000) // 30 min ago
+  const recent = new Date(now.getTime() - 2 * 60 * 1000) // 2 min ago
+
+  beforeEach(async () => {
+    rdb = await createTestDb()
+    await seedTestClient(rdb, CID)
+  })
+
+  async function seed(status: string, updatedAt: Date, date = "2026-06-16") {
+    await rdb.insert(posts).values({
+      clientId: CID,
+      platform: "facebook",
+      scheduledDate: date,
+      status: status as never,
+      content: "x",
+      reasoning: "x",
+      updatedAt,
+    })
+    const rows = await rdb.select().from(posts).where(eq(posts.scheduledDate, date))
+    return rows[0].id
+  }
+
+  it("flips a long-stuck 'publishing' post to 'failed' with a note", async () => {
+    const id = await seed("publishing", old)
+    const count = await reclaimStalePublishingPosts(rdb, now)
+    expect(count).toBe(1)
+    const row = (await rdb.select().from(posts).where(eq(posts.id, id)))[0]
+    expect(row.status).toBe("failed")
+    expect(row.publishError).toMatch(/interrupted/i)
+  })
+
+  it("leaves a recently-claimed 'publishing' post alone", async () => {
+    const id = await seed("publishing", recent)
+    const count = await reclaimStalePublishingPosts(rdb, now)
+    expect(count).toBe(0)
+    const row = (await rdb.select().from(posts).where(eq(posts.id, id)))[0]
+    expect(row.status).toBe("publishing")
+  })
+
+  it("never touches posts in other statuses", async () => {
+    await seed("approved", old, "2026-06-16")
+    await seed("published", old, "2026-06-17")
+    const count = await reclaimStalePublishingPosts(rdb, now)
+    expect(count).toBe(0)
   })
 })

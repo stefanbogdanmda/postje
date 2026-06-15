@@ -3,7 +3,7 @@ import { db } from "@/db"
 import { posts } from "@/db/schema"
 import { and, eq, lte, isNull } from "drizzle-orm"
 import { verifyCronSecret } from "@/lib/cron-auth"
-import { publishPostToMeta } from "@/lib/meta/publish"
+import { publishPostToMeta, reclaimStalePublishingPosts } from "@/lib/meta/publish"
 
 export const maxDuration = 300
 
@@ -14,6 +14,13 @@ export async function GET(req: Request) {
   if (!cronAuth.ok) return cronAuth.response
 
   const now = new Date()
+
+  // Recover any posts stranded in 'publishing' by an interrupted earlier run
+  // before we process this batch.
+  const reclaimed = await reclaimStalePublishingPosts(db, now)
+  if (reclaimed > 0) {
+    console.warn(`[cron/publish-due] reclaimed ${reclaimed} stale publishing post(s)`)
+  }
 
   // Find approved posts where publishAt has passed and not yet published
   const duePosts = await db
@@ -53,6 +60,7 @@ export async function GET(req: Request) {
   )
 
   return NextResponse.json({
+    reclaimed,
     processed: duePosts.length,
     published,
     failed,
