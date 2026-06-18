@@ -11,7 +11,8 @@ import {
   buildWriteUserPrompt,
 } from "@/lib/ai/prompts"
 import { extractJSON } from "@/lib/ai/extract-json"
-import { validatePosts } from "@/lib/ai/validate-posts"
+import { runPostQualityLoop } from "@/lib/ai/post-quality-loop"
+import { rewriteDayPost } from "@/lib/ai/rewrite-day-post"
 import { buildClientProfile } from "@/lib/ai/client-profile"
 import {
   readRejectionCounts,
@@ -230,10 +231,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate posts
-    const validatedPosts = validatePosts(
-      rawPosts.posts,
-      clientProfile.bannedPhrases
+    // Validate + self-correct: run the quality loop. Each day is rewritten
+    // (up to 2 retries) whenever validation surfaces a warning. Days that
+    // are already clean cost zero extra API calls.
+    const loopResult = await runPostQualityLoop(rawPosts.posts, {
+      bannedPhrases: clientProfile.bannedPhrases,
+      rewrite: (draft, feedback) =>
+        rewriteDayPost(anthropic, clientProfile, draft, feedback),
+    })
+    const validatedPosts = loopResult.posts
+
+    console.log(
+      `[generate-posts] quality loop for client ${clientId}:`,
+      loopResult.attempts
+        .map((a) => `${a.day}=${a.attempts}${a.clean ? "✓" : "✗"}`)
+        .join(" ")
     )
 
     // Convert Claude output to per-platform DB rows
