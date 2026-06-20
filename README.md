@@ -1,8 +1,16 @@
 # Postje
 
+[![CI](https://github.com/stefanbogdanmda/postje/actions/workflows/ci.yml/badge.svg)](https://github.com/stefanbogdanmda/postje/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-406%20passing-brightgreen)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+[![License](https://img.shields.io/badge/license-source--available-lightgrey)](LICENSE)
+
 **Postje is a multi-tenant SaaS that runs social media for small businesses.** Each client gets an isolated account; the platform generates Instagram and Facebook posts with the Claude API, lets clients approve or reject each one, and publishes the approved posts automatically through the Meta Graph API.
 
 Built with Next.js 16 (App Router) and React 19, on a serverless Postgres + Vercel stack.
+
+**[▶ Live demo](https://social-ai-amber.vercel.app)** — passwordless magic-link login. The client-facing UI is in Dutch (v1).
 
 > Status: working application — typecheck, production build, and **406 automated tests** all pass.
 
@@ -26,6 +34,29 @@ These are the things this codebase is deliberately careful about:
 - **Rate limiting & abuse controls** — persisted rate limiting on sensitive endpoints.
 - **Input validation** — request payloads validated with Zod at the boundary.
 - **Tested** — 406 tests across 34 files (Vitest), run against an in-memory Postgres (`pglite`) so integration tests exercise real SQL.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Client["Client / Admin<br/>(browser)"] --> Next["Next.js 16<br/>App Router · Server Actions"]
+    Next --> Drizzle["Drizzle ORM"] --> Neon[("Neon Postgres<br/>multi-tenant · client_id")]
+    Next --> Claude["Claude API<br/>post generation"]
+    Next --> Blob["Vercel Blob<br/>photo storage"]
+    Cron["Vercel Cron"] --> Next
+    Next --> Meta["Meta Graph API<br/>publish to IG / FB"]
+```
+
+**Post generation — the self-correcting quality loop** (`src/lib/ai/post-quality-loop.ts`): each day's post is validated against brand/length/rules and rewritten until it passes or the retry budget runs out, so weak posts are caught before a client ever sees them.
+
+```mermaid
+flowchart LR
+    Gen["Generate day's post"] --> Check["Validate<br/>brand · length · rules"]
+    Check -->|passes| Save["Insert as draft"]
+    Check -->|warnings| Budget{"Retry budget<br/>left?"}
+    Budget -->|yes| Rewrite["Rewrite post"] --> Check
+    Budget -->|no| Save
+```
 
 ## Tech stack
 

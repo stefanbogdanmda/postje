@@ -72,7 +72,7 @@ export function PostActions({
   function handleRequestChanges() {
     if (atMaxRejections) {
       setError(
-        "Je hebt het maximum aantal wijzigingen bereikt. Neem contact op met Stefan."
+        "Je hebt het maximum aantal wijzigingen bereikt. Neem contact op met ons."
       )
       return
     }

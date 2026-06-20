@@ -7,14 +7,12 @@ import {
 } from "@/test/db"
 import { insertPosts } from "@/lib/posts/repository"
 import {
-  posts,
   deletionRequests,
   accounts,
   sessions,
   verificationTokens,
   users,
 } from "@/db/schema"
-import { eq } from "drizzle-orm"
 import {
   buildExportJson,
   EXPORT_SCHEMA_VERSION,
@@ -150,7 +148,6 @@ describe("buildExportJson — exclusions", () => {
 describe("buildExportJson — tenant isolation", () => {
   it("scopes data to the requested userId only", async () => {
     const OTHER_CLIENT_ID = "test-client-002"
-    const OTHER_USER_ID = `user-${OTHER_CLIENT_ID}`
     await seedTestClient(db, OTHER_CLIENT_ID)
     await seedTestPhoto(db, OTHER_CLIENT_ID, "other-photo")
     await insertPosts(db, [

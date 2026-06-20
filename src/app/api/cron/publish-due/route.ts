@@ -15,7 +15,9 @@ export async function GET(req: Request) {
 
   const now = new Date()
 
-  // Find approved posts where publishAt has passed and not yet published
+  // Operator-level job: intentionally NOT scoped to one client — it processes due
+  // posts across all clients. publishPostToMeta re-checks clientId ownership per post.
+  // Find approved posts whose publishAt has passed and aren't yet published.
   const duePosts = await db
     .select({ id: posts.id })
     .from(posts)
@@ -35,6 +37,9 @@ export async function GET(req: Request) {
     error?: string
   }> = []
 
+  // Published serially (one Meta call at a time). Acceptable at the current client
+  // count; switch to bounded-concurrency Promise.allSettled if the daily queue
+  // regularly approaches the LIMIT(50) / maxDuration ceiling.
   for (const post of duePosts) {
     const result = await publishPostToMeta(db, post.id, "cron:publish-due")
     results.push({

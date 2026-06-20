@@ -82,7 +82,7 @@ export async function regeneratePostAction(
     return {
       success: false,
       error:
-        "Je hebt het maximum aantal wijzigingen bereikt. Neem contact op met Stefan.",
+        "Je hebt het maximum aantal wijzigingen bereikt. Neem contact op met ons.",
     }
   try {
     const newContent = await regenerateSinglePost(

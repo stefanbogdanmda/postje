@@ -13,7 +13,7 @@ import {
 import type { PhotoAnalysis } from "@/lib/ai/types"
 
 // ──────────────────────────────────────────────
-// users — one row per person (clients and Stefan)
+// users — one row per person (clients and the operator/admin)
 // ──────────────────────────────────────────────
 export const users = pgTable("users", {
   id: text("id")
@@ -321,7 +321,7 @@ export const publishAttempts = pgTable(
 
 // ──────────────────────────────────────────────
 // postFlags — client-reported issues on published posts.
-// Flag button on published posts alerts Stefan immediately.
+// Flag button on published posts alerts the operator immediately.
 // ──────────────────────────────────────────────
 export const postFlags = pgTable(
   "post_flags",

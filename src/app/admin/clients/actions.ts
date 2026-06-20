@@ -86,8 +86,8 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
   // Note: The magic link email goes through signIn("resend"), which is
   // subject to the rate limiter (5 requests per email per 15 min).
   // If the email was somehow rate-limited, the magic link silently
-  // fails and Stefan sees the "couldn't send" warning. Acceptable
-  // for v1 since Stefan is the only person triggering this.
+  // fails and the operator sees the "couldn't send" warning. Acceptable
+  // for v1 since the operator is the only person triggering this.
   let emailFailed = false
   try {
     await sendWelcomeEmail(email.toLowerCase())

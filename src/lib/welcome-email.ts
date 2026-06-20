@@ -6,7 +6,7 @@ const EMAIL_FROM = process.env.EMAIL_FROM ?? "onboarding@resend.dev"
 /**
  * Sends a welcome email to a newly created client.
  * This is a separate email from the magic link — it provides context
- * ("Stefan created your account") before the Auth.js login email arrives.
+ * ("your account has been created") before the Auth.js login email arrives.
  *
  * Returns { success: true } or { success: false, error: string }.
  *
@@ -34,12 +34,12 @@ export async function sendWelcomeEmail(email: string): Promise<{
           <h2 style="color: #1a1a1a;">Postje</h2>
           <p>Hallo!</p>
           <p>
-            Stefan heeft een account voor je aangemaakt bij Postje.
+            Er is een account voor je aangemaakt bij Postje.
             Je ontvangt zo een tweede e-mail met een inloglink waarmee
             je je dashboard kunt bekijken.
           </p>
           <p style="color: #666; font-size: 14px;">
-            Heb je vragen? Neem dan contact op met Stefan.
+            Heb je vragen? Neem dan contact op met ons.
           </p>
         </div>
       `,

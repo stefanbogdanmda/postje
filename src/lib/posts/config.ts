@@ -1,5 +1,5 @@
 /**
- * Maximum times a post can be rejected before flagging Stefan.
+ * Maximum times a post can be rejected before flagging the operator.
  * Enforced in application logic, not a DB constraint.
  */
 export const MAX_REJECTIONS = 3
