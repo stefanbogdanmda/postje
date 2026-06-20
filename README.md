@@ -39,8 +39,8 @@ These are the things this codebase is deliberately careful about:
 
 ```mermaid
 flowchart LR
-    Client["Client / Admin<br/>(browser)"] --> Next["Next.js 16<br/>App Router · Server Actions"]
-    Next --> Drizzle["Drizzle ORM"] --> Neon[("Neon Postgres<br/>multi-tenant · client_id")]
+    Client["Client / Admin<br/>(browser)"] --> Next["Next.js 16<br/>App Router, Server Actions"]
+    Next --> Drizzle["Drizzle ORM"] --> Neon[("Neon Postgres<br/>multi-tenant, client_id")]
     Next --> Claude["Claude API<br/>post generation"]
     Next --> Blob["Vercel Blob<br/>photo storage"]
     Cron["Vercel Cron"] --> Next
@@ -51,7 +51,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Gen["Generate day's post"] --> Check["Validate<br/>brand · length · rules"]
+    Gen["Generate day's post"] --> Check["Validate<br/>brand, length, rules"]
     Check -->|passes| Save["Insert as draft"]
     Check -->|warnings| Budget{"Retry budget<br/>left?"}
     Budget -->|yes| Rewrite["Rewrite post"] --> Check
