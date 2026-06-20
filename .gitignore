@@ -56,3 +56,6 @@ sqlite.db-journal
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local agent tooling artefacts
+.bridgespace/
