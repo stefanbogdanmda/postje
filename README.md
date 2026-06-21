@@ -14,6 +14,12 @@ Built with Next.js 16 (App Router) and React 19, on a serverless Postgres + Verc
 
 > Status: working application — typecheck, production build, and **406 automated tests** all pass.
 
+<p align="center">
+  <img src="assets/dashboard.png" alt="Postje client dashboard — posts to review, scheduled, and published" width="820">
+  <br/>
+  <em>The client dashboard: review AI-generated posts one by one, see what's scheduled, and what's already published.</em>
+</p>
+
 ---
 
 ## What it does
